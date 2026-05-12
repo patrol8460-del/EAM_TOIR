@@ -585,21 +585,10 @@ export default function EquipmentPage() {
   const [openColMenu, setOpenColMenu] = useState<string | null>(null)
   const colMenuRef = useRef<HTMLDivElement>(null)
 
-  // ── Column drag-and-drop reorder (via header drag) ──
+  // ── Column drag-and-drop reorder (via header grip drag) ──
   const [dragColKey, setDragColKey] = useState<string | null>(null)
-
   // Track which column is being dragged over for visual indicator
   const [dragOverColKey, setDragOverColKey] = useState<string | null>(null)
-
-  const handleColDragStart = useCallback((e: React.DragEvent, colKey: string) => {
-    setDragColKey(colKey)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', colKey)
-    // Make the drag ghost slightly transparent
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '0.4'
-    }
-  }, [])
 
   const handleColDragOver = useCallback((e: React.DragEvent, targetKey: string) => {
     e.preventDefault()
@@ -625,17 +614,8 @@ export default function EquipmentPage() {
     })
     setDragColKey(null)
     setOpenColMenu(null)
-    toast.success(`Столбец перемещён`)
+    toast.success('Столбец перемещён')
   }, [dragColKey])
-
-  const handleColDragEnd = useCallback((e: React.DragEvent) => {
-    setDragColKey(null)
-    setDragOverColKey(null)
-    // Restore opacity
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = ''
-    }
-  }, [])
 
   // Build a mapping from colKey to its JSON group.field for extracting raw values
   const colKeyToJsonPath = useMemo(() => {
@@ -1648,20 +1628,38 @@ export default function EquipmentPage() {
                       className={`text-xs whitespace-nowrap relative select-none transition-all ${
                         isDragging ? 'opacity-40' : isDragOver ? 'bg-orange-100 ring-2 ring-orange-400 ring-inset' : ''
                       }`}
-                      draggable
-                      onDragStart={(e) => handleColDragStart(e, col.key)}
                       onDragOver={(e) => handleColDragOver(e, col.key)}
                       onDragLeave={() => setDragOverColKey(null)}
                       onDrop={(e) => handleColDrop(e, col.key)}
-                      onDragEnd={handleColDragEnd}
                     >
-                      <div ref={isOpen ? colMenuRef : undefined} className="cursor-grab active:cursor-grabbing">
+                      <div ref={isOpen ? colMenuRef : undefined} className="flex items-center">
+                        {/* Drag handle — separate from button, this is the draggable element */}
+                        <div
+                          className="cursor-grab active:cursor-grabbing px-0.5 -ml-0.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                          draggable
+                          onDragStart={(e) => {
+                            setDragColKey(col.key)
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', col.key)
+                            // Use the parent <th> as the drag ghost image
+                            const th = (e.currentTarget.closest('th') as HTMLElement)
+                            if (th) {
+                              e.dataTransfer.setDragImage(th, th.offsetWidth / 2, th.offsetHeight / 2)
+                            }
+                          }}
+                          onDragEnd={(e) => {
+                            setDragColKey(null)
+                            setDragOverColKey(null)
+                          }}
+                          title="Перетащить для изменения порядка"
+                        >
+                          <GripVertical className="size-3.5" />
+                        </div>
+                        {/* Clickable header content — sort, filter menu */}
                         <button
                           className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer group"
                           onClick={(e) => { e.stopPropagation(); setOpenColMenu(isOpen ? null : col.key) }}
-                          draggable={false}
                         >
-                          <GripVertical className="size-3.5 text-muted-foreground/60 group-hover:text-muted-foreground shrink-0" />
                           <span className={isSorted ? 'font-semibold text-foreground' : 'text-muted-foreground group-hover:text-foreground'}>{col.label}</span>
                           {isSorted && sortDir === 'asc' && <ChevronDown className="size-3 text-orange-600" />}
                           {isSorted && sortDir === 'desc' && <ChevronUp className="size-3 text-orange-600" />}
