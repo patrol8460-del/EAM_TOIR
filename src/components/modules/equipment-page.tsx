@@ -1320,7 +1320,7 @@ export default function EquipmentPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-full overflow-y-auto overflow-x-hidden">
       {/* Header */}
       <div>
         <h1 className="text-xl font-semibold">Оборудование</h1>
@@ -1566,7 +1566,7 @@ export default function EquipmentPage() {
             </div>
           )}
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-340px)] min-h-[300px] rounded-md border">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">

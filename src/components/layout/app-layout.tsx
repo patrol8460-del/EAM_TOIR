@@ -20,7 +20,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       >
         <TopBar />
 
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 overflow-hidden">
           {children}
         </main>
       </div>
