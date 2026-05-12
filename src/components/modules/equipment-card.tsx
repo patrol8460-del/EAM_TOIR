@@ -621,12 +621,12 @@ export default function EquipmentCardPage({ equipmentId, onBack, onDeleted }: Eq
   // ===================== RENDER =====================
 
   return (
-    <div className="space-y-0">
-      {/* Header bar */}
-      <div className="sticky top-0 z-10 border-b bg-background">
-        <div className="px-4 sm:px-6 pt-4 pb-3">
+    <div className="flex flex-col h-full min-w-0 overflow-hidden">
+      {/* Header bar — fixed, does not scroll */}
+      <div className="shrink-0 border-b bg-background z-10">
+        <div className="px-4 sm:px-6 pt-4 pb-3 min-w-0">
           {/* Back button + title */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
             <div className="flex items-center gap-3 min-w-0">
               <Button
                 variant="ghost"
@@ -726,8 +726,8 @@ export default function EquipmentCardPage({ equipmentId, onBack, onDeleted }: Eq
         </div>
       </div>
 
-      {/* Content */}
-      <div>
+      {/* Content — scrollable area fills remaining space */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center gap-2 text-muted-foreground h-64">
@@ -745,8 +745,9 @@ export default function EquipmentCardPage({ equipmentId, onBack, onDeleted }: Eq
 
         {/* Tabs */}
         {!loading && data && (
-          <Tabs defaultValue="main" className="flex flex-col">
-            <div className="border-b px-4 sm:px-6 shrink-0 overflow-x-auto">
+          <Tabs defaultValue="main" className="flex flex-col h-full">
+            {/* Tab bar — fixed, does not scroll vertically */}
+            <div className="shrink-0 border-b px-4 sm:px-6 overflow-x-auto">
               <TabsList className="bg-transparent h-auto p-0 gap-0">
                 {tabDefs.map((tab) => {
                   const Icon = tab.icon
@@ -772,6 +773,8 @@ export default function EquipmentCardPage({ equipmentId, onBack, onDeleted }: Eq
               [data-tab-color][data-state="active"] svg { color: var(--tab-color) !important; }
             `}</style>
 
+            {/* Tab content — scrollable, bounded by parent */}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
             <div className="p-4 sm:p-6 max-w-7xl">
                 {/* ════════ TAB 1: MAIN INFO ════════ */}
                 <TabsContent value="main">
@@ -968,9 +971,9 @@ export default function EquipmentCardPage({ equipmentId, onBack, onDeleted }: Eq
 
                 {/* ════════ TAB 4: MAINTENANCE ════════ */}
                 <TabsContent value="maintenance">
-                  <div className="space-y-4">
+                  <div className="space-y-4 overflow-x-auto">
                     {/* ── Column headers ── */}
-                    <div className="grid gap-x-2 pt-1 pb-1 items-end" style={{ gridTemplateColumns: maintGridCols }}>
+                    <div className="grid gap-x-2 pt-1 pb-1 items-end min-w-[680px]" style={{ gridTemplateColumns: maintGridCols }}>
                       <span className="text-[9px] font-semibold uppercase text-muted-foreground whitespace-nowrap truncate">Вид обслуживания</span>
                       <span className="text-[9px] font-semibold uppercase text-muted-foreground text-center">ТО, мес.</span>
                       <span className="text-[9px] font-semibold uppercase text-muted-foreground text-center">ТР, мес.</span>
@@ -1146,6 +1149,7 @@ export default function EquipmentCardPage({ equipmentId, onBack, onDeleted }: Eq
                   <MeasuredParametersTab equipmentId={data.id} />
                 </TabsContent>
               </div>
+            </div>{/* end scrollable tab content wrapper */}
           </Tabs>
         )}
       </div>
