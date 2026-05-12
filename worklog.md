@@ -966,3 +966,30 @@ Fixed two issues with column drag-and-drop reordering in the equipment table:
 ### Verification
 - No pinned/fixed columns by default — confirmed by checking `DEFAULT_VISIBLE_COLUMNS` and `visibleOptionalCols` state (no pinning logic exists)
 - Lint passes (only pre-existing error in unrelated ipv6-proxy.js)
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix column drag-and-drop using @dnd-kit (replace broken mouse events approach)
+
+Work Log:
+- Analyzed previous failed attempts (4x): HTML5 DnD, useRef fixes, manual mouse events with elementFromPoint
+- Found @dnd-kit/core v6.3.1 and @dnd-kit/sortable v10.0.0 already installed in project
+- Created SortableColumnHeader component using useSortable hook from @dnd-kit/sortable
+- Replaced manual mouse event code (colHeaderDragRef, dragColKey, dragOverColKey, document event listeners) with DndContext + SortableContext + handleColumnDragEnd
+- Each column header now uses dnd-kit listeners on GripVertical drag handle
+- MouseSensor with 5px distance activation constraint prevents accidental drags
+- TouchSensor with 200ms delay for mobile support
+- ClosestCenter collision detection for column reordering
+- arrayMove utility for clean reorder logic
+- Build verified successful with no new errors
+- Production server deployed on port 3000
+
+Stage Summary:
+- Column drag-and-drop now uses @dnd-kit library (robust, battle-tested)
+- SortableColumnHeader component wraps each data column <th> with useSortable hook
+- DndContext wraps entire table with SortableContext for column headers
+- GripVertical icon serves as the drag handle with dnd-kit listeners
+- Visual feedback: opacity 0.4 + orange background + shadow during drag
+- Previous manual mouse events code completely removed
+- Key files modified: src/components/modules/equipment-page.tsx
+

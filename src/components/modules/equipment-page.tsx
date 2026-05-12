@@ -88,6 +88,22 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
+import {
+  DndContext,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface EquipmentItem {
   id: string
@@ -428,6 +444,153 @@ const DEFAULT_VISIBLE_COLUMNS = ['code', 'name', 'status', 'criticality', 'depar
 
 const STORAGE_KEY = 'eam-equipment-columns'
 
+// ── Sortable Column Header (uses @dnd-kit) ──
+function SortableColumnHeader({
+  col,
+  sortKey,
+  sortDir,
+  colFilters,
+  openColMenu,
+  setOpenColMenu,
+  setSortDirection,
+  clearFilter,
+  toggleFilterValue,
+  columnUniqueValues,
+  items,
+  cellText,
+  colMenuRef,
+}: {
+  col: ColDef
+  sortKey: string | null
+  sortDir: 'asc' | 'desc' | null
+  colFilters: Record<string, Set<string>>
+  openColMenu: string | null
+  setOpenColMenu: (key: string | null) => void
+  setSortDirection: (key: string, dir: 'asc' | 'desc') => void
+  clearFilter: (key: string) => void
+  toggleFilterValue: (key: string, val: string) => void
+  columnUniqueValues: Record<string, string[]>
+  items: EquipmentItem[]
+  cellText: (item: EquipmentItem, colKey: string) => string
+  colMenuRef: React.RefObject<HTMLDivElement | null>
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: col.key })
+
+  const isSorted = sortKey === col.key
+  const hasFilter = colFilters[col.key] && colFilters[col.key].size > 0
+  const isOpen = openColMenu === col.key
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 50 : undefined,
+    position: isDragging ? 'relative' : undefined,
+  }
+
+  return (
+    <th
+      ref={setNodeRef}
+      data-col-key={col.key}
+      className={`text-foreground h-10 px-2 text-left align-middle font-medium text-xs whitespace-nowrap relative select-none ${isDragging ? 'bg-orange-50 shadow-md' : ''}`}
+      style={style}
+    >
+      <div ref={isOpen ? colMenuRef : undefined} className="flex items-center">
+        {/* Drag handle — dnd-kit listeners attached here */}
+        <div
+          className="cursor-grab active:cursor-grabbing px-0.5 -ml-0.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors touch-none"
+          {...attributes}
+          {...listeners}
+          title="Перетащить для изменения порядка"
+        >
+          <GripVertical className="size-3.5" />
+        </div>
+        {/* Clickable header content — sort, filter menu */}
+        <button
+          className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer group"
+          onClick={(e) => { e.stopPropagation(); setOpenColMenu(isOpen ? null : col.key) }}
+        >
+          <span className={isSorted ? 'font-semibold text-foreground' : 'text-muted-foreground group-hover:text-foreground'}>{col.label}</span>
+          {isSorted && sortDir === 'asc' && <ChevronDown className="size-3 text-orange-600" />}
+          {isSorted && sortDir === 'desc' && <ChevronUp className="size-3 text-orange-600" />}
+          {!isSorted && <ChevronsUpDown className="size-3 text-muted-foreground/40 group-hover:text-muted-foreground/60" />}
+          {hasFilter && <span className="size-1.5 rounded-full bg-orange-500 shrink-0" />}
+        </button>
+        {isOpen && (
+          <div
+            className="absolute top-full left-0 z-50 mt-1 w-52 bg-popover text-popover-foreground rounded-md border shadow-lg flex flex-col overflow-hidden"
+            style={{ maxHeight: 'min(420px, calc(100vh - 100px))' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Sort section */}
+            <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Сортировка</div>
+            <button
+              className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-xs hover:bg-muted/80 transition-colors shrink-0 ${isSorted && sortDir === 'asc' ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/30' : ''}`}
+              onClick={() => setSortDirection(col.key, 'asc')}
+            >
+              <ChevronDown className="size-3" />
+              По возрастанию (А→Я)
+              {isSorted && sortDir === 'asc' && <CheckCircle2 className="size-3 ml-auto text-orange-600" />}
+            </button>
+            <button
+              className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-xs hover:bg-muted/80 transition-colors shrink-0 ${isSorted && sortDir === 'desc' ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/30' : ''}`}
+              onClick={() => setSortDirection(col.key, 'desc')}
+            >
+              <ChevronUp className="size-3" />
+              По убыванию (Я→А)
+              {isSorted && sortDir === 'desc' && <CheckCircle2 className="size-3 ml-auto text-orange-600" />}
+            </button>
+            {/* Filter section */}
+            {(() => {
+              const uvals = columnUniqueValues[col.key] || []
+              if (uvals.length === 0) return null
+              return (
+                <>
+                  <div className="border-t shrink-0" />
+                  <div className="flex items-center justify-between px-2 pt-1 pb-0.5 shrink-0">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Фильтр</span>
+                    {hasFilter && (
+                      <button className="text-[10px] text-orange-600 hover:text-orange-700 font-medium" onClick={() => clearFilter(col.key)}>
+                        Сбросить
+                      </button>
+                    )}
+                  </div>
+                  <div className="min-h-0 overflow-y-auto custom-scrollbar px-1 pb-1">
+                    {uvals.map((val) => {
+                      const checked = colFilters[col.key]?.has(val) || false
+                      return (
+                        <label key={val} className="flex items-center gap-1.5 px-1.5 py-[3px] rounded text-[11px] hover:bg-muted/60 cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleFilterValue(col.key, val)}
+                            className="size-3 shrink-0 rounded border-muted-foreground/30 accent-orange-600"
+                          />
+                          <span className="truncate flex-1 min-w-0">{val}</span>
+                          <span className="text-[10px] text-muted-foreground/40 tabular-nums shrink-0">
+                            {(() => { try { return items.filter((i) => cellText(i, col.key) === val).length } catch { return 0 } })()}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        )}
+      </div>
+    </th>
+  )
+}
+
 export default function EquipmentPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -594,101 +757,27 @@ export default function EquipmentPage() {
   const [openColMenu, setOpenColMenu] = useState<string | null>(null)
   const colMenuRef = useRef<HTMLDivElement>(null)
 
-  // ── Column drag-and-drop reorder via mouse events (HTML5 DnD doesn't work inside <table>) ──
-  const [dragColKey, setDragColKey] = useState<string | null>(null)
-  const [dragOverColKey, setDragOverColKey] = useState<string | null>(null)
-  const colHeaderDragRef = useRef<{
-    fromKey: string
-    startX: number
-    startY: number
-    thresholdReached: boolean
-  } | null>(null)
-  const dragColKeyRef = useRef<string | null>(null)
-  const dragOverColKeyRef = useRef<string | null>(null)
+  // ── Column drag-and-drop reorder via @dnd-kit ──
+  const columnSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  )
 
-  // Keep refs in sync with state (for use in event handlers without re-registering)
-  useEffect(() => { dragColKeyRef.current = dragColKey }, [dragColKey])
-  useEffect(() => { dragOverColKeyRef.current = dragOverColKey }, [dragOverColKey])
+  const handleColumnDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    setOpenColMenu(null)
+    if (!over || active.id === over.id) return
 
-  const handleGripMouseDown = useCallback((e: React.MouseEvent, colKey: string) => {
-    e.preventDefault() // prevent text selection
-    colHeaderDragRef.current = {
-      fromKey: colKey,
-      startX: e.clientX,
-      startY: e.clientY,
-      thresholdReached: false,
-    }
+    setVisibleOptionalCols((prev) => {
+      const oldIdx = prev.indexOf(active.id as string)
+      const newIdx = prev.indexOf(over.id as string)
+      if (oldIdx === -1 || newIdx === -1) return prev
+      const arr = arrayMove(prev, oldIdx, newIdx)
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch { /* ignore */ }
+      return arr
+    })
+    toast.success('Столбец перемещён')
   }, [])
-
-  // Register mousemove/mouseup ONCE on mount
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      const drag = colHeaderDragRef.current
-      if (!drag) return
-
-      // Require minimum 5px movement before starting actual drag
-      if (!drag.thresholdReached) {
-        const dx = Math.abs(e.clientX - drag.startX)
-        const dy = Math.abs(e.clientY - drag.startY)
-        if (dx < 5 && dy < 5) return
-        drag.thresholdReached = true
-        setDragColKey(drag.fromKey)
-        dragColKeyRef.current = drag.fromKey
-      }
-
-      // Find which <th> is under the cursor
-      const currentDragKey = dragColKeyRef.current
-      if (currentDragKey) {
-        const draggedTh = document.querySelector(`th[data-col-key="${currentDragKey}"]`) as HTMLElement
-        if (draggedTh) draggedTh.style.pointerEvents = 'none'
-      }
-      const el = document.elementFromPoint(e.clientX, e.clientY)
-      if (currentDragKey) {
-        const draggedTh = document.querySelector(`th[data-col-key="${currentDragKey}"]`) as HTMLElement
-        if (draggedTh) draggedTh.style.pointerEvents = ''
-      }
-      const overKey = el ? (el.closest('th[data-col-key]') as HTMLElement)?.dataset.colKey || null : null
-      if (dragOverColKeyRef.current !== overKey) {
-        dragOverColKeyRef.current = overKey
-        setDragOverColKey(overKey)
-      }
-    }
-
-    const onMouseUp = () => {
-      const drag = colHeaderDragRef.current
-      if (!drag) return
-      colHeaderDragRef.current = null
-
-      const fromKey = drag.fromKey
-      const toKey = drag.thresholdReached ? dragOverColKeyRef.current : null
-      dragColKeyRef.current = null
-      dragOverColKeyRef.current = null
-      setDragColKey(null)
-      setDragOverColKey(null)
-
-      if (!drag.thresholdReached || !toKey || fromKey === toKey) return
-
-      setVisibleOptionalCols((prev) => {
-        const arr = [...prev]
-        const fromIdx = arr.indexOf(fromKey)
-        const toIdx = arr.indexOf(toKey)
-        if (fromIdx === -1 || toIdx === -1) return prev
-        arr.splice(fromIdx, 1)
-        arr.splice(toIdx, 0, fromKey)
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch { /* ignore */ }
-        return arr
-      })
-      setOpenColMenu(null)
-      toast.success('Столбец перемещён')
-    }
-
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
-    return () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
-  }, []) // empty deps — register once on mount, use refs for current values
 
   // Build a mapping from colKey to its JSON group.field for extracting raw values
   const colKeyToJsonPath = useMemo(() => {
@@ -1677,7 +1766,13 @@ export default function EquipmentPage() {
 
           {/* Table — scrolls independently, fills all remaining space */}
           <div className="flex-1 min-h-0 overflow-auto">
+          <DndContext
+            sensors={columnSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleColumnDragEnd}
+          >
           <Table>
+            <SortableContext items={activeColumns.map(c => c.key)} strategy={horizontalListSortingStrategy}>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-6 w-10">
@@ -1689,109 +1784,27 @@ export default function EquipmentPage() {
                     )}
                   </button>
                 </TableHead>
-                {activeColumns.map((col) => {
-                  const isSorted = sortKey === col.key
-                  const hasFilter = colFilters[col.key] && colFilters[col.key].size > 0
-                  const isOpen = openColMenu === col.key
-                  const isDragging = dragColKey === col.key
-                  const isDragOver = dragOverColKey === col.key && dragColKey !== col.key
-                  return (
-                    <TableHead
-                      key={col.key}
-                      data-col-key={col.key}
-                      className={`text-xs whitespace-nowrap relative select-none transition-all ${
-                        isDragging ? 'opacity-40' : isDragOver ? 'bg-orange-100 ring-2 ring-orange-400 ring-inset' : ''
-                      }`}
-                    >
-                      <div ref={isOpen ? colMenuRef : undefined} className="flex items-center">
-                        {/* Drag handle — uses mouse events (not HTML5 DnD which breaks inside <table>) */}
-                        <div
-                          className="cursor-grab active:cursor-grabbing px-0.5 -ml-0.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                          onMouseDown={(e) => handleGripMouseDown(e, col.key)}
-                          title="Перетащить для изменения порядка"
-                        >
-                          <GripVertical className="size-3.5" />
-                        </div>
-                        {/* Clickable header content — sort, filter menu */}
-                        <button
-                          className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer group"
-                          onClick={(e) => { e.stopPropagation(); setOpenColMenu(isOpen ? null : col.key) }}
-                        >
-                          <span className={isSorted ? 'font-semibold text-foreground' : 'text-muted-foreground group-hover:text-foreground'}>{col.label}</span>
-                          {isSorted && sortDir === 'asc' && <ChevronDown className="size-3 text-orange-600" />}
-                          {isSorted && sortDir === 'desc' && <ChevronUp className="size-3 text-orange-600" />}
-                          {!isSorted && <ChevronsUpDown className="size-3 text-muted-foreground/40 group-hover:text-muted-foreground/60" />}
-                          {hasFilter && <span className="size-1.5 rounded-full bg-orange-500 shrink-0" />}
-                        </button>
-                        {isOpen && (
-                          <div
-                            className="absolute top-full left-0 z-50 mt-1 w-52 bg-popover text-popover-foreground rounded-md border shadow-lg flex flex-col overflow-hidden"
-                            style={{ maxHeight: 'min(420px, calc(100vh - 100px))' }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {/* Sort section */}
-                            <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Сортировка</div>
-                            <button
-                              className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-xs hover:bg-muted/80 transition-colors shrink-0 ${isSorted && sortDir === 'asc' ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/30' : ''}`}
-                              onClick={() => setSortDirection(col.key, 'asc')}
-                            >
-                              <ChevronDown className="size-3" />
-                              По возрастанию (А→Я)
-                              {isSorted && sortDir === 'asc' && <CheckCircle2 className="size-3 ml-auto text-orange-600" />}
-                            </button>
-                            <button
-                              className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-xs hover:bg-muted/80 transition-colors shrink-0 ${isSorted && sortDir === 'desc' ? 'bg-orange-50 text-orange-700 dark:bg-orange-950/30' : ''}`}
-                              onClick={() => setSortDirection(col.key, 'desc')}
-                            >
-                              <ChevronUp className="size-3" />
-                              По убыванию (Я→А)
-                              {isSorted && sortDir === 'desc' && <CheckCircle2 className="size-3 ml-auto text-orange-600" />}
-                            </button>
-                            {/* Filter section */}
-                            {(() => {
-                              const uvals = columnUniqueValues[col.key] || []
-                              if (uvals.length === 0) return null
-                              return (
-                                <>
-                                  <div className="border-t shrink-0" />
-                                  <div className="flex items-center justify-between px-2 pt-1 pb-0.5 shrink-0">
-                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Фильтр</span>
-                                    {hasFilter && (
-                                      <button className="text-[10px] text-orange-600 hover:text-orange-700 font-medium" onClick={() => clearFilter(col.key)}>
-                                        Сбросить
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="min-h-0 overflow-y-auto custom-scrollbar px-1 pb-1">
-                                    {uvals.map((val) => {
-                                      const checked = colFilters[col.key]?.has(val) || false
-                                      return (
-                                        <label key={val} className="flex items-center gap-1.5 px-1.5 py-[3px] rounded text-[11px] hover:bg-muted/60 cursor-pointer transition-colors">
-                                          <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            onChange={() => toggleFilterValue(col.key, val)}
-                                            className="size-3 shrink-0 rounded border-muted-foreground/30 accent-orange-600"
-                                          />
-                                          <span className="truncate flex-1 min-w-0">{val}</span>
-                                          <span className="text-[10px] text-muted-foreground/40 tabular-nums shrink-0">
-                                            {(() => { try { return items.filter((i) => cellText(i, col.key) === val).length } catch { return 0 } })()}
-                                          </span>
-                                        </label>
-                                      )
-                                    })}
-                                  </div>
-                                </>
-                              )
-                            })()}
-                          </div>
-                        )}
-                      </div>
-                    </TableHead>
-                  )
-                })}
+                {activeColumns.map((col) => (
+                  <SortableColumnHeader
+                    key={col.key}
+                    col={col}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    colFilters={colFilters}
+                    openColMenu={openColMenu}
+                    setOpenColMenu={setOpenColMenu}
+                    setSortDirection={setSortDirection}
+                    clearFilter={clearFilter}
+                    toggleFilterValue={toggleFilterValue}
+                    columnUniqueValues={columnUniqueValues}
+                    items={items}
+                    cellText={cellText}
+                    colMenuRef={colMenuRef}
+                  />
+                ))}
               </TableRow>
             </TableHeader>
+            </SortableContext>
             <TableBody>
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
@@ -1862,6 +1875,7 @@ export default function EquipmentPage() {
               )}
             </TableBody>
           </Table>
+          </DndContext>
           </div>
         </CardContent>
       </Card>
