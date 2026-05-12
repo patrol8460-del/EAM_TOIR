@@ -594,37 +594,96 @@ export default function EquipmentPage() {
   const [openColMenu, setOpenColMenu] = useState<string | null>(null)
   const colMenuRef = useRef<HTMLDivElement>(null)
 
-  // ── Column drag-and-drop reorder (via header grip drag) ──
+  // ── Column drag-and-drop reorder via mouse events (HTML5 DnD doesn't work inside <table>) ──
   const [dragColKey, setDragColKey] = useState<string | null>(null)
-  const dragColKeyRef = useRef<string | null>(null)
-  // Track which column is being dragged over for visual indicator
   const [dragOverColKey, setDragOverColKey] = useState<string | null>(null)
+  const colHeaderDragRef = useRef<{
+    fromKey: string
+    startX: number
+    startY: number
+    thresholdReached: boolean
+  } | null>(null)
 
-  const handleColDragOver = useCallback((e: React.DragEvent, targetKey: string) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverColKey(targetKey)
-  }, [])
+  // Determine which column header is under the cursor during drag
+  const getColKeyUnderCursor = useCallback((clientX: number): string | null => {
+    // Hide the dragged header temporarily to let elementFromPoint find the target underneath
+    if (dragColKey) {
+      const draggedTh = document.querySelector(`th[data-col-key="${dragColKey}"]`) as HTMLElement
+      if (draggedTh) draggedTh.style.pointerEvents = 'none'
+    }
+    const el = document.elementFromPoint(clientX, clientY_ref.current)
+    if (dragColKey) {
+      const draggedTh = document.querySelector(`th[data-col-key="${dragColKey}"]`) as HTMLElement
+      if (draggedTh) draggedTh.style.pointerEvents = ''
+    }
+    if (!el) return null
+    const th = (el.closest('th[data-col-key]') as HTMLElement)
+    return th?.dataset.colKey || null
+  }, [dragColKey])
 
-  const handleColDrop = useCallback((e: React.DragEvent, targetKey: string) => {
-    e.preventDefault()
-    setDragOverColKey(null)
-    const fromKey = dragColKeyRef.current
-    if (!fromKey || fromKey === targetKey) { setDragColKey(null); dragColKeyRef.current = null; return }
-    setVisibleOptionalCols((prev) => {
-      const arr = [...prev]
-      const fromIdx = arr.indexOf(fromKey)
-      const toIdx = arr.indexOf(targetKey)
-      if (fromIdx === -1 || toIdx === -1) return prev
-      arr.splice(fromIdx, 1)
-      arr.splice(toIdx, 0, fromKey)
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch { /* ignore */ }
-      return arr
-    })
-    dragColKeyRef.current = null
-    setDragColKey(null)
-    setOpenColMenu(null)
-    toast.success('Столбец перемещён')
+  const clientY_ref = useRef(0)
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      const drag = colHeaderDragRef.current
+      if (!drag) return
+      clientY_ref.current = e.clientY
+
+      // Require minimum 5px movement before starting actual drag
+      if (!drag.thresholdReached) {
+        const dx = Math.abs(e.clientX - drag.startX)
+        const dy = Math.abs(e.clientY - drag.startY)
+        if (dx < 5 && dy < 5) return
+        drag.thresholdReached = true
+        setDragColKey(drag.fromKey)
+      }
+
+      const overKey = getColKeyUnderCursor(e.clientX)
+      setDragOverColKey((prev) => prev === overKey ? prev : overKey)
+    }
+
+    const onMouseUp = () => {
+      const drag = colHeaderDragRef.current
+      if (!drag) return
+      colHeaderDragRef.current = null
+
+      const fromKey = drag.fromKey
+      const toKey = drag.thresholdReached ? dragOverColKey : null
+      setDragColKey(null)
+      setDragOverColKey(null)
+
+      if (!drag.thresholdReached || !toKey || fromKey === toKey) return
+
+      setVisibleOptionalCols((prev) => {
+        const arr = [...prev]
+        const fromIdx = arr.indexOf(fromKey)
+        const toIdx = arr.indexOf(toKey)
+        if (fromIdx === -1 || toIdx === -1) return prev
+        arr.splice(fromIdx, 1)
+        arr.splice(toIdx, 0, fromKey)
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch { /* ignore */ }
+        return arr
+      })
+      setOpenColMenu(null)
+      toast.success('Столбец перемещён')
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [dragColKey, dragOverColKey, getColKeyUnderCursor])
+
+  const handleGripMouseDown = useCallback((e: React.MouseEvent, colKey: string) => {
+    e.preventDefault() // prevent text selection
+    colHeaderDragRef.current = {
+      fromKey: colKey,
+      startX: e.clientX,
+      startY: e.clientY,
+      thresholdReached: false,
+    }
   }, [])
 
   // Build a mapping from colKey to its JSON group.field for extracting raw values
@@ -1635,35 +1694,16 @@ export default function EquipmentPage() {
                   return (
                     <TableHead
                       key={col.key}
+                      data-col-key={col.key}
                       className={`text-xs whitespace-nowrap relative select-none transition-all ${
                         isDragging ? 'opacity-40' : isDragOver ? 'bg-orange-100 ring-2 ring-orange-400 ring-inset' : ''
                       }`}
-                      onDragOver={(e) => handleColDragOver(e, col.key)}
-                      onDragLeave={() => setDragOverColKey(null)}
-                      onDrop={(e) => handleColDrop(e, col.key)}
                     >
                       <div ref={isOpen ? colMenuRef : undefined} className="flex items-center">
-                        {/* Drag handle — separate from button, this is the draggable element */}
+                        {/* Drag handle — uses mouse events (not HTML5 DnD which breaks inside <table>) */}
                         <div
                           className="cursor-grab active:cursor-grabbing px-0.5 -ml-0.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-                          draggable
-                          onDragStart={(e) => {
-                            const key = col.key
-                            dragColKeyRef.current = key
-                            setDragColKey(key)
-                            e.dataTransfer.effectAllowed = 'move'
-                            e.dataTransfer.setData('application/x-column-key', key)
-                            // Use the parent <th> as the drag ghost image
-                            const th = (e.currentTarget.closest('th') as HTMLElement)
-                            if (th) {
-                              e.dataTransfer.setDragImage(th, th.offsetWidth / 2, th.offsetHeight / 2)
-                            }
-                          }}
-                          onDragEnd={() => {
-                            dragColKeyRef.current = null
-                            setDragColKey(null)
-                            setDragOverColKey(null)
-                          }}
+                          onMouseDown={(e) => handleGripMouseDown(e, col.key)}
                           title="Перетащить для изменения порядка"
                         >
                           <GripVertical className="size-3.5" />
