@@ -14,13 +14,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <div
         className={cn(
-          'flex flex-1 flex-col min-h-screen transition-[margin-left] duration-200 ease-in-out',
+          'flex flex-1 flex-col min-h-screen min-w-0 overflow-hidden transition-[margin-left] duration-200 ease-in-out',
           sidebarCollapsed ? 'ml-16' : 'ml-[260px]'
         )}
       >
         <TopBar />
 
-        <main className="flex-1 p-6 min-w-0">
+        <main className="flex-1 p-6 min-w-0 overflow-x-hidden">
           {children}
         </main>
       </div>

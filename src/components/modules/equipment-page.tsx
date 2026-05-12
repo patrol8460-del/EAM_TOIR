@@ -1320,7 +1320,7 @@ export default function EquipmentPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0">
       {/* Header */}
       <div>
         <h1 className="text-xl font-semibold">Оборудование</h1>
@@ -1333,7 +1333,7 @@ export default function EquipmentPage() {
       <EquipmentSearch onSearch={handleAdvancedSearch} isSearching={advancedSearching} />
 
       {/* Search result badge + bulk action bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
         <div className="flex items-center gap-2">
           {hasAdvancedResults && (
             <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 gap-1">
@@ -1380,8 +1380,8 @@ export default function EquipmentPage() {
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center min-w-0">
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2 bg-orange-600 hover:bg-orange-700">
@@ -1471,7 +1471,7 @@ export default function EquipmentPage() {
             Импорт из Excel
           </Button>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center min-w-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -1497,7 +1497,7 @@ export default function EquipmentPage() {
       </div>
 
       {/* Table */}
-      <Card>
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           {/* Column config button — top-right of the card */}
           <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
