@@ -541,20 +541,29 @@ export default function EquipmentPage() {
     setColEditLeft((l) => l.filter((k) => k !== key))
   }, [])
 
-  // Drag handlers for left list reordering
-  const colDragStart = useCallback((idx: number) => { setColDragIdx(idx) }, [])
+  // Drag handlers for left list reordering (use ref to avoid stale closure)
+  const colDragIdxRef = useRef<number | null>(null)
+  const colDragStart = useCallback((idx: number) => {
+    colDragIdxRef.current = idx
+    setColDragIdx(idx)
+  }, [])
   const colDragOver = useCallback((e: React.DragEvent, idx: number) => {
     e.preventDefault()
-    if (colDragIdx === null || colDragIdx === idx) return
+    const fromIdx = colDragIdxRef.current
+    if (fromIdx === null || fromIdx === idx) return
     setColEditLeft((prev) => {
       const arr = [...prev]
-      const [moved] = arr.splice(colDragIdx, 1)
+      const [moved] = arr.splice(fromIdx, 1)
       arr.splice(idx, 0, moved)
       return arr
     })
+    colDragIdxRef.current = idx
     setColDragIdx(idx)
-  }, [colDragIdx])
-  const colDragEnd = useCallback(() => { setColDragIdx(null) }, [])
+  }, [])
+  const colDragEnd = useCallback(() => {
+    colDragIdxRef.current = null
+    setColDragIdx(null)
+  }, [])
 
   // Move selected column up/down in left list
   const moveColUp = useCallback((idx: number) => {
@@ -587,6 +596,7 @@ export default function EquipmentPage() {
 
   // ── Column drag-and-drop reorder (via header grip drag) ──
   const [dragColKey, setDragColKey] = useState<string | null>(null)
+  const dragColKeyRef = useRef<string | null>(null)
   // Track which column is being dragged over for visual indicator
   const [dragOverColKey, setDragOverColKey] = useState<string | null>(null)
 
@@ -599,9 +609,8 @@ export default function EquipmentPage() {
   const handleColDrop = useCallback((e: React.DragEvent, targetKey: string) => {
     e.preventDefault()
     setDragOverColKey(null)
-    // Read the source column key from dataTransfer (reliable across renders)
-    const fromKey = e.dataTransfer.getData('text/plain') || dragColKey
-    if (!fromKey || fromKey === targetKey) { setDragColKey(null); return }
+    const fromKey = dragColKeyRef.current
+    if (!fromKey || fromKey === targetKey) { setDragColKey(null); dragColKeyRef.current = null; return }
     setVisibleOptionalCols((prev) => {
       const arr = [...prev]
       const fromIdx = arr.indexOf(fromKey)
@@ -612,10 +621,11 @@ export default function EquipmentPage() {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch { /* ignore */ }
       return arr
     })
+    dragColKeyRef.current = null
     setDragColKey(null)
     setOpenColMenu(null)
     toast.success('Столбец перемещён')
-  }, [dragColKey])
+  }, [])
 
   // Build a mapping from colKey to its JSON group.field for extracting raw values
   const colKeyToJsonPath = useMemo(() => {
@@ -1638,16 +1648,19 @@ export default function EquipmentPage() {
                           className="cursor-grab active:cursor-grabbing px-0.5 -ml-0.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
                           draggable
                           onDragStart={(e) => {
-                            setDragColKey(col.key)
+                            const key = col.key
+                            dragColKeyRef.current = key
+                            setDragColKey(key)
                             e.dataTransfer.effectAllowed = 'move'
-                            e.dataTransfer.setData('text/plain', col.key)
+                            e.dataTransfer.setData('application/x-column-key', key)
                             // Use the parent <th> as the drag ghost image
                             const th = (e.currentTarget.closest('th') as HTMLElement)
                             if (th) {
                               e.dataTransfer.setDragImage(th, th.offsetWidth / 2, th.offsetHeight / 2)
                             }
                           }}
-                          onDragEnd={(e) => {
+                          onDragEnd={() => {
+                            dragColKeyRef.current = null
                             setDragColKey(null)
                             setDragOverColKey(null)
                           }}
