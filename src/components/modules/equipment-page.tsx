@@ -32,6 +32,7 @@ import {
   ChevronsUpDown,
   ChevronUp,
   ChevronDown,
+  GripVertical,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -251,14 +252,12 @@ const statusOptions = [
 ]
 
 // ── Table Column Definitions ──────────────────────────
-// "fixed" columns are always visible and cannot be toggled.
-// All other columns are optional and user can add/remove them.
+// All columns are user-configurable: visible/hidden, reordered via drag or dialog.
 
 type ColDef = {
   key: string
   label: string
   group: string
-  fixed?: boolean
   /** Render function for the cell value. Returns ReactNode */
   render: (item: EquipmentItem) => React.ReactNode
 }
@@ -302,14 +301,10 @@ function jBool<K extends keyof EquipmentItem>(group: K, field: string) {
   }
 }
 
-const FIXED_COLUMNS: ColDef[] = [
-  { key: '__check__', label: '', group: '', fixed: true, render: () => null },
-  { key: 'code', label: 'Инв. номер', group: 'Основное', fixed: true, render: (item) => <span className="font-mono text-sm font-medium whitespace-nowrap">{item.code}</span> },
-  { key: 'name', label: 'Наименование', group: 'Основное', fixed: true, render: (item) => <span className="font-medium">{item.name}</span> },
-]
-
-const OPTIONAL_COLUMNS: ColDef[] = [
+const ALL_COLUMNS: ColDef[] = [
   // Основное
+  { key: 'code', label: 'Инв. номер', group: 'Основное', render: (item) => <span className="font-mono text-sm font-medium whitespace-nowrap">{item.code}</span> },
+  { key: 'name', label: 'Наименование', group: 'Основное', render: (item) => <span className="font-medium">{item.name}</span> },
   { key: 'status', label: 'Статус', group: 'Основное', render: (item) => <StatusBadge status={item.status} /> },
   { key: 'criticality', label: 'Критичность', group: 'Основное', render: (item) => <CriticalityBadge level={item.criticality} /> },
   { key: 'department', label: 'Подразделение', group: 'Основное', render: (item) => <span className="text-sm">{item.department?.name || '—'}</span> },
@@ -429,7 +424,7 @@ const OPTIONAL_COLUMNS: ColDef[] = [
 
 const COLUMN_GROUPS = ['Основное', 'Идентификация', 'Флаги', 'Даты', 'Прочее', 'Местоположение', 'Ответственность', 'ТО и ремонты', 'Поверка', 'Промбезопасность', 'Надзор']
 
-const DEFAULT_VISIBLE_OPTIONAL = ['status', 'criticality', 'department', 'equipmentType']
+const DEFAULT_VISIBLE_COLUMNS = ['code', 'name', 'status', 'criticality', 'department', 'equipmentType']
 
 const STORAGE_KEY = 'eam-equipment-columns'
 
@@ -478,24 +473,31 @@ export default function EquipmentPage() {
 
   // ── Column visibility state (persisted in localStorage, ORDER MATTERS) ──
   const [visibleOptionalCols, setVisibleOptionalCols] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return DEFAULT_VISIBLE_OPTIONAL
+    if (typeof window === 'undefined') return DEFAULT_VISIBLE_COLUMNS
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) return parsed
+        if (Array.isArray(parsed)) {
+          // Migration: if saved columns don't include 'code' or 'name', prepend them
+          const hasCode = parsed.includes('code')
+          const hasName = parsed.includes('name')
+          if (!hasCode || !hasName) {
+            const migrated = [...(hasName ? [] : ['name']), ...(hasCode ? [] : ['code']), ...parsed]
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
+            return migrated
+          }
+          return parsed
+        }
       }
     } catch { /* ignore */ }
-    return DEFAULT_VISIBLE_OPTIONAL
+    return DEFAULT_VISIBLE_COLUMNS
   })
 
   // activeColumns preserves the user-defined order from visibleOptionalCols
-  const activeColumns = [
-    ...FIXED_COLUMNS,
-    ...visibleOptionalCols
-      .map((key) => OPTIONAL_COLUMNS.find((c) => c.key === key))
-      .filter(Boolean) as typeof OPTIONAL_COLUMNS,
-  ]
+  const activeColumns = visibleOptionalCols
+    .map((key) => ALL_COLUMNS.find((c) => c.key === key))
+    .filter(Boolean) as typeof ALL_COLUMNS
 
   const saveColumns = useCallback((cols: string[]) => {
     setVisibleOptionalCols(cols)
@@ -503,7 +505,7 @@ export default function EquipmentPage() {
   }, [])
 
   const resetColumns = useCallback(() => {
-    saveColumns(DEFAULT_VISIBLE_OPTIONAL)
+    saveColumns(DEFAULT_VISIBLE_COLUMNS)
   }, [saveColumns])
 
   // ── Column selector dialog state ──
@@ -514,9 +516,9 @@ export default function EquipmentPage() {
   const [colDragIdx, setColDragIdx] = useState<number | null>(null)
 
   const openColumnDialog = useCallback(() => {
-    const selected = visibleOptionalCols.filter((k) => OPTIONAL_COLUMNS.some((c) => c.key === k))
+    const selected = visibleOptionalCols.filter((k) => ALL_COLUMNS.some((c) => c.key === k))
     const available = COLUMN_GROUPS
-      .flatMap((g) => OPTIONAL_COLUMNS.filter((c) => c.group === g).map((c) => c.key))
+      .flatMap((g) => ALL_COLUMNS.filter((c) => c.group === g).map((c) => c.key))
       .filter((k) => !selected.includes(k))
     setColEditLeft(selected)
     setColEditRight(available)
@@ -583,10 +585,46 @@ export default function EquipmentPage() {
   const [openColMenu, setOpenColMenu] = useState<string | null>(null)
   const colMenuRef = useRef<HTMLDivElement>(null)
 
+  // ── Column drag-and-drop reorder (via header drag) ──
+  const [dragColKey, setDragColKey] = useState<string | null>(null)
+
+  const handleColDragStart = useCallback((e: React.DragEvent, colKey: string) => {
+    setDragColKey(colKey)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', colKey)
+  }, [])
+
+  const handleColDragOver = useCallback((e: React.DragEvent, targetKey: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const handleColDrop = useCallback((e: React.DragEvent, targetKey: string) => {
+    e.preventDefault()
+    const fromKey = dragColKey
+    if (!fromKey || fromKey === targetKey) { setDragColKey(null); return }
+    setVisibleOptionalCols((prev) => {
+      const arr = [...prev]
+      const fromIdx = arr.indexOf(fromKey)
+      const toIdx = arr.indexOf(targetKey)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      arr.splice(fromIdx, 1)
+      arr.splice(toIdx, 0, fromKey)
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch { /* ignore */ }
+      return arr
+    })
+    setDragColKey(null)
+    setOpenColMenu(null)
+  }, [dragColKey])
+
+  const handleColDragEnd = useCallback(() => {
+    setDragColKey(null)
+  }, [])
+
   // Build a mapping from colKey to its JSON group.field for extracting raw values
   const colKeyToJsonPath = useMemo(() => {
     const map: Record<string, { group: keyof EquipmentItem; field: string }> = {}
-    OPTIONAL_COLUMNS.forEach((c) => {
+    ALL_COLUMNS.forEach((c) => {
       // Parse the render function's actual JSON field path from jTxt/jNum/jBool calls
       // The render functions are closures created by jTxt, jNum, jBool, which store group and field
       // We'll extract from the column key naming convention instead
@@ -783,7 +821,7 @@ export default function EquipmentPage() {
   const columnUniqueValues = useMemo(() => {
     try {
       const map: Record<string, string[]> = {}
-      const allCols = activeColumns.filter((c) => c.key !== '__check__')
+      const allCols = activeColumns
       allCols.forEach((col) => {
         const vals = new Set<string>()
         items.forEach((item) => {
@@ -838,7 +876,7 @@ export default function EquipmentPage() {
     }
     setExporting(true)
     try {
-      const cols = activeColumns.filter((c) => c.key !== '__check__')
+      const cols = activeColumns
       const headers = cols.map((c) => c.label)
       const rows = displayItems.map((item) =>
         cols.map((c) => cellText(item, c.key))
@@ -1540,7 +1578,7 @@ export default function EquipmentPage() {
           {(sortKey || Object.keys(colFilters).length > 0) && (
             <div className="flex items-center gap-2 px-4 py-2 border-t bg-muted/20 text-xs flex-wrap shrink-0">
               {sortKey && (() => {
-                const col = OPTIONAL_COLUMNS.find((c) => c.key === sortKey)
+                const col = ALL_COLUMNS.find((c) => c.key === sortKey)
                 return (
                   <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-[11px] font-normal">
                     {sortDir === 'asc' ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
@@ -1550,7 +1588,7 @@ export default function EquipmentPage() {
                 )
               })()}
               {Object.entries(colFilters).map(([fk, vals]) => {
-                const col = OPTIONAL_COLUMNS.find((c) => c.key === fk)
+                const col = ALL_COLUMNS.find((c) => c.key === fk)
                 return (
                   <Badge key={fk} variant="secondary" className="gap-1 px-2 py-0.5 text-[11px] font-normal">
                     <Filter className="size-3" />
@@ -1582,17 +1620,31 @@ export default function EquipmentPage() {
                     )}
                   </button>
                 </TableHead>
-                {activeColumns.filter((c) => c.key !== '__check__').map((col) => {
+                {activeColumns.map((col) => {
                   const isSorted = sortKey === col.key
                   const hasFilter = colFilters[col.key] && colFilters[col.key].size > 0
                   const isOpen = openColMenu === col.key
+                  const isDragging = dragColKey === col.key
+                  const isDragOver = dragColKey && dragColKey !== col.key
                   return (
-                    <TableHead key={col.key} className="text-xs whitespace-nowrap relative">
-                      <div ref={isOpen ? colMenuRef : undefined}>
+                    <TableHead
+                      key={col.key}
+                      className={`text-xs whitespace-nowrap relative select-none transition-colors ${
+                        isDragging ? 'opacity-40' : isDragOver ? 'bg-orange-50' : ''
+                      }`}
+                      draggable
+                      onDragStart={(e) => handleColDragStart(e, col.key)}
+                      onDragOver={(e) => handleColDragOver(e, col.key)}
+                      onDrop={(e) => handleColDrop(e, col.key)}
+                      onDragEnd={handleColDragEnd}
+                    >
+                      <div ref={isOpen ? colMenuRef : undefined} className="cursor-grab active:cursor-grabbing">
                         <button
                           className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer group"
                           onClick={(e) => { e.stopPropagation(); setOpenColMenu(isOpen ? null : col.key) }}
+                          draggable={false}
                         >
+                          <GripVertical className="size-3 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0" />
                           <span className={isSorted ? 'font-semibold text-foreground' : 'text-muted-foreground group-hover:text-foreground'}>{col.label}</span>
                           {isSorted && sortDir === 'asc' && <ChevronDown className="size-3 text-orange-600" />}
                           {isSorted && sortDir === 'desc' && <ChevronUp className="size-3 text-orange-600" />}
@@ -1673,7 +1725,7 @@ export default function EquipmentPage() {
                 Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell className="pl-6 w-10"><Skeleton className="h-4 w-4" /></TableCell>
-                    {activeColumns.filter((c) => c.key !== '__check__').map((col) => (
+                    {activeColumns.map((col) => (
                       <TableCell key={col.key}>
                         <Skeleton className="h-5 w-20" />
                       </TableCell>
@@ -1729,7 +1781,7 @@ export default function EquipmentPage() {
                         )}
                       </button>
                     </TableCell>
-                    {activeColumns.filter((c) => c.key !== '__check__').map((col) => (
+                    {activeColumns.map((col) => (
                       <TableCell key={col.key}>{col.render(item)}</TableCell>
                     ))}
                   </TableRow>
@@ -1922,7 +1974,7 @@ export default function EquipmentPage() {
                     Отображаемые
                     <Badge variant="secondary" className="ml-1 h-3.5 min-w-3.5 px-1 text-[9px] rounded-full">{colEditLeft.length}</Badge>
                   </span>
-                  {colEditLeft.length !== DEFAULT_VISIBLE_OPTIONAL.length && (
+                  {colEditLeft.length !== DEFAULT_VISIBLE_COLUMNS.length && (
                     <button className="text-[10px] text-orange-600 hover:text-orange-700 font-medium cursor-pointer" onClick={resetColumns}>Сбросить</button>
                   )}
                 </div>
@@ -1934,7 +1986,7 @@ export default function EquipmentPage() {
                     </div>
                   )}
                   {colEditLeft.map((key, idx) => {
-                    const col = OPTIONAL_COLUMNS.find((c) => c.key === key)
+                    const col = ALL_COLUMNS.find((c) => c.key === key)
                     if (!col) return null
                     return (
                       <div
@@ -1985,7 +2037,7 @@ export default function EquipmentPage() {
                   )}
                   {COLUMN_GROUPS.map((group) => {
                     const groupKeys = colEditRight.filter((key) => {
-                      const col = OPTIONAL_COLUMNS.find((c) => c.key === key)
+                      const col = ALL_COLUMNS.find((c) => c.key === key)
                       return col?.group === group
                     })
                     if (groupKeys.length === 0) return null
@@ -1993,7 +2045,7 @@ export default function EquipmentPage() {
                       <div key={group}>
                         <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-1.5 pt-1.5 pb-0.5 sticky top-0 bg-background z-10">{group}</p>
                         {groupKeys.map((key) => {
-                          const col = OPTIONAL_COLUMNS.find((c) => c.key === key)
+                          const col = ALL_COLUMNS.find((c) => c.key === key)
                           if (!col) return null
                           return (
                             <div
