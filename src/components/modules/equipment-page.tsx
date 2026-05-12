@@ -588,20 +588,30 @@ export default function EquipmentPage() {
   // ── Column drag-and-drop reorder (via header drag) ──
   const [dragColKey, setDragColKey] = useState<string | null>(null)
 
+  // Track which column is being dragged over for visual indicator
+  const [dragOverColKey, setDragOverColKey] = useState<string | null>(null)
+
   const handleColDragStart = useCallback((e: React.DragEvent, colKey: string) => {
     setDragColKey(colKey)
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', colKey)
+    // Make the drag ghost slightly transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4'
+    }
   }, [])
 
   const handleColDragOver = useCallback((e: React.DragEvent, targetKey: string) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
+    setDragOverColKey(targetKey)
   }, [])
 
   const handleColDrop = useCallback((e: React.DragEvent, targetKey: string) => {
     e.preventDefault()
-    const fromKey = dragColKey
+    setDragOverColKey(null)
+    // Read the source column key from dataTransfer (reliable across renders)
+    const fromKey = e.dataTransfer.getData('text/plain') || dragColKey
     if (!fromKey || fromKey === targetKey) { setDragColKey(null); return }
     setVisibleOptionalCols((prev) => {
       const arr = [...prev]
@@ -615,10 +625,16 @@ export default function EquipmentPage() {
     })
     setDragColKey(null)
     setOpenColMenu(null)
+    toast.success(`Столбец перемещён`)
   }, [dragColKey])
 
-  const handleColDragEnd = useCallback(() => {
+  const handleColDragEnd = useCallback((e: React.DragEvent) => {
     setDragColKey(null)
+    setDragOverColKey(null)
+    // Restore opacity
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = ''
+    }
   }, [])
 
   // Build a mapping from colKey to its JSON group.field for extracting raw values
@@ -1625,16 +1641,17 @@ export default function EquipmentPage() {
                   const hasFilter = colFilters[col.key] && colFilters[col.key].size > 0
                   const isOpen = openColMenu === col.key
                   const isDragging = dragColKey === col.key
-                  const isDragOver = dragColKey && dragColKey !== col.key
+                  const isDragOver = dragOverColKey === col.key && dragColKey !== col.key
                   return (
                     <TableHead
                       key={col.key}
-                      className={`text-xs whitespace-nowrap relative select-none transition-colors ${
-                        isDragging ? 'opacity-40' : isDragOver ? 'bg-orange-50' : ''
+                      className={`text-xs whitespace-nowrap relative select-none transition-all ${
+                        isDragging ? 'opacity-40' : isDragOver ? 'bg-orange-100 ring-2 ring-orange-400 ring-inset' : ''
                       }`}
                       draggable
                       onDragStart={(e) => handleColDragStart(e, col.key)}
                       onDragOver={(e) => handleColDragOver(e, col.key)}
+                      onDragLeave={() => setDragOverColKey(null)}
                       onDrop={(e) => handleColDrop(e, col.key)}
                       onDragEnd={handleColDragEnd}
                     >
@@ -1644,7 +1661,7 @@ export default function EquipmentPage() {
                           onClick={(e) => { e.stopPropagation(); setOpenColMenu(isOpen ? null : col.key) }}
                           draggable={false}
                         >
-                          <GripVertical className="size-3 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0" />
+                          <GripVertical className="size-3.5 text-muted-foreground/60 group-hover:text-muted-foreground shrink-0" />
                           <span className={isSorted ? 'font-semibold text-foreground' : 'text-muted-foreground group-hover:text-foreground'}>{col.label}</span>
                           {isSorted && sortDir === 'asc' && <ChevronDown className="size-3 text-orange-600" />}
                           {isSorted && sortDir === 'desc' && <ChevronUp className="size-3 text-orange-600" />}

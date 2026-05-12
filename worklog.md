@@ -922,3 +922,47 @@ Fixed 6 route mismatches between frontend API calls and backend controller endpo
 ### Verification
 - `dotnet build` completed with 0 errors, 0 warnings
 
+
+---
+Task ID: 4 — Fix column drag-and-drop: GripVertical icon visibility and drag functionality
+
+### Date: 2025-07-11
+
+### Summary
+Fixed two issues with column drag-and-drop reordering in the equipment table:
+1. GripVertical icon was nearly invisible (size-3 at 30% opacity)
+2. Drag-and-drop was unreliable due to stale closure issue with `dragColKey` state
+
+### Changes Made (file: src/components/modules/equipment-page.tsx)
+
+#### 1. Added `dragOverColKey` state for precise drag-over tracking
+- New state variable: `const [dragOverColKey, setDragOverColKey] = useState<string | null>(null)`
+- `handleColDragOver` now sets `dragOverColKey` to the target column
+- Added `onDragLeave` handler on `<TableHead>` to clear `dragOverColKey`
+
+#### 2. Fixed drag-over visual indicator
+- Changed from `isDragOver = dragColKey && dragColKey !== col.key` (any column that wasn't the source got highlighted)
+- To `isDragOver = dragOverColKey === col.key && dragColKey !== col.key` (only the column currently being hovered gets highlighted)
+- Enhanced visual: `bg-orange-100 ring-2 ring-orange-400 ring-inset` instead of just `bg-orange-50`
+
+#### 3. Fixed `handleColDrop` stale closure
+- Now reads from `e.dataTransfer.getData('text/plain')` as primary source, with `dragColKey` as fallback
+- Added `toast.success('Столбец перемещён')` confirmation
+- Clears `dragOverColKey` on drop
+
+#### 4. Fixed `handleColDragEnd` 
+- Added `React.DragEvent` parameter type
+- Clears both `dragColKey` and `dragOverColKey`
+- Restores element opacity
+
+#### 5. Made GripVertical icon visible
+- Size: `size-3` (12px) → `size-3.5` (14px)
+- Default opacity: `text-muted-foreground/30` → `text-muted-foreground/60` (doubled from 30% to 60%)
+- Hover: `group-hover:text-muted-foreground/60` → `group-hover:text-muted-foreground` (full opacity on hover)
+
+#### 6. Added `onDragLeave` handler
+- `onDragLeave={() => setDragOverColKey(null)}` clears drag-over highlight when cursor leaves
+
+### Verification
+- No pinned/fixed columns by default — confirmed by checking `DEFAULT_VISIBLE_COLUMNS` and `visibleOptionalCols` state (no pinning logic exists)
+- Lint passes (only pre-existing error in unrelated ipv6-proxy.js)
