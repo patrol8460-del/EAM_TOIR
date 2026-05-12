@@ -1320,9 +1320,9 @@ export default function EquipmentPage() {
   }
 
   return (
-    <div className="space-y-4 w-full min-w-0">
+    <div className="flex flex-col gap-4 w-full h-full min-w-0 overflow-hidden">
       {/* Header */}
-      <div>
+      <div className="shrink-0">
         <h1 className="text-xl font-semibold">Оборудование</h1>
         <p className="text-sm text-muted-foreground">
           Классификатор объектов предприятия
@@ -1330,10 +1330,12 @@ export default function EquipmentPage() {
       </div>
 
       {/* Advanced Search */}
-      <EquipmentSearch onSearch={handleAdvancedSearch} isSearching={advancedSearching} />
+      <div className="shrink-0">
+        <EquipmentSearch onSearch={handleAdvancedSearch} isSearching={advancedSearching} />
+      </div>
 
       {/* Search result badge + bulk action bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0 shrink-0">
         <div className="flex items-center gap-2">
           {hasAdvancedResults && (
             <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 gap-1">
@@ -1380,7 +1382,7 @@ export default function EquipmentPage() {
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0 shrink-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center min-w-0">
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
@@ -1496,11 +1498,11 @@ export default function EquipmentPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
+      {/* Table — fills remaining space, scrolls independently */}
+      <Card className="overflow-hidden flex-1 min-h-0 flex flex-col">
+        <CardContent className="p-0 flex flex-col flex-1 min-h-0 overflow-hidden">
           {/* Column config button — top-right of the card */}
-          <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+          <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30 shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
                 {items.length > 0 && `${items.length} ${items.length === 1 ? 'запись' : items.length < 5 ? 'записи' : 'записей'}`}
@@ -1536,7 +1538,7 @@ export default function EquipmentPage() {
 
           {/* Active sort & filter indicators */}
           {(sortKey || Object.keys(colFilters).length > 0) && (
-            <div className="flex items-center gap-2 px-4 py-2 border-t bg-muted/20 text-xs flex-wrap">
+            <div className="flex items-center gap-2 px-4 py-2 border-t bg-muted/20 text-xs flex-wrap shrink-0">
               {sortKey && (() => {
                 const col = OPTIONAL_COLUMNS.find((c) => c.key === sortKey)
                 return (
@@ -1566,7 +1568,8 @@ export default function EquipmentPage() {
             </div>
           )}
 
-          <div className="overflow-x-auto -mx-6 px-6">
+          {/* Table — scrolls independently, fills all remaining space */}
+          <div className="flex-1 min-h-0 overflow-auto">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
