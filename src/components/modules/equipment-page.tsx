@@ -603,31 +603,28 @@ export default function EquipmentPage() {
     startY: number
     thresholdReached: boolean
   } | null>(null)
+  const dragColKeyRef = useRef<string | null>(null)
+  const dragOverColKeyRef = useRef<string | null>(null)
 
-  // Determine which column header is under the cursor during drag
-  const getColKeyUnderCursor = useCallback((clientX: number): string | null => {
-    // Hide the dragged header temporarily to let elementFromPoint find the target underneath
-    if (dragColKey) {
-      const draggedTh = document.querySelector(`th[data-col-key="${dragColKey}"]`) as HTMLElement
-      if (draggedTh) draggedTh.style.pointerEvents = 'none'
+  // Keep refs in sync with state (for use in event handlers without re-registering)
+  useEffect(() => { dragColKeyRef.current = dragColKey }, [dragColKey])
+  useEffect(() => { dragOverColKeyRef.current = dragOverColKey }, [dragOverColKey])
+
+  const handleGripMouseDown = useCallback((e: React.MouseEvent, colKey: string) => {
+    e.preventDefault() // prevent text selection
+    colHeaderDragRef.current = {
+      fromKey: colKey,
+      startX: e.clientX,
+      startY: e.clientY,
+      thresholdReached: false,
     }
-    const el = document.elementFromPoint(clientX, clientY_ref.current)
-    if (dragColKey) {
-      const draggedTh = document.querySelector(`th[data-col-key="${dragColKey}"]`) as HTMLElement
-      if (draggedTh) draggedTh.style.pointerEvents = ''
-    }
-    if (!el) return null
-    const th = (el.closest('th[data-col-key]') as HTMLElement)
-    return th?.dataset.colKey || null
-  }, [dragColKey])
+  }, [])
 
-  const clientY_ref = useRef(0)
-
+  // Register mousemove/mouseup ONCE on mount
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       const drag = colHeaderDragRef.current
       if (!drag) return
-      clientY_ref.current = e.clientY
 
       // Require minimum 5px movement before starting actual drag
       if (!drag.thresholdReached) {
@@ -636,10 +633,25 @@ export default function EquipmentPage() {
         if (dx < 5 && dy < 5) return
         drag.thresholdReached = true
         setDragColKey(drag.fromKey)
+        dragColKeyRef.current = drag.fromKey
       }
 
-      const overKey = getColKeyUnderCursor(e.clientX)
-      setDragOverColKey((prev) => prev === overKey ? prev : overKey)
+      // Find which <th> is under the cursor
+      const currentDragKey = dragColKeyRef.current
+      if (currentDragKey) {
+        const draggedTh = document.querySelector(`th[data-col-key="${currentDragKey}"]`) as HTMLElement
+        if (draggedTh) draggedTh.style.pointerEvents = 'none'
+      }
+      const el = document.elementFromPoint(e.clientX, e.clientY)
+      if (currentDragKey) {
+        const draggedTh = document.querySelector(`th[data-col-key="${currentDragKey}"]`) as HTMLElement
+        if (draggedTh) draggedTh.style.pointerEvents = ''
+      }
+      const overKey = el ? (el.closest('th[data-col-key]') as HTMLElement)?.dataset.colKey || null : null
+      if (dragOverColKeyRef.current !== overKey) {
+        dragOverColKeyRef.current = overKey
+        setDragOverColKey(overKey)
+      }
     }
 
     const onMouseUp = () => {
@@ -648,7 +660,9 @@ export default function EquipmentPage() {
       colHeaderDragRef.current = null
 
       const fromKey = drag.fromKey
-      const toKey = drag.thresholdReached ? dragOverColKey : null
+      const toKey = drag.thresholdReached ? dragOverColKeyRef.current : null
+      dragColKeyRef.current = null
+      dragOverColKeyRef.current = null
       setDragColKey(null)
       setDragOverColKey(null)
 
@@ -674,17 +688,7 @@ export default function EquipmentPage() {
       document.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('mouseup', onMouseUp)
     }
-  }, [dragColKey, dragOverColKey, getColKeyUnderCursor])
-
-  const handleGripMouseDown = useCallback((e: React.MouseEvent, colKey: string) => {
-    e.preventDefault() // prevent text selection
-    colHeaderDragRef.current = {
-      fromKey: colKey,
-      startX: e.clientX,
-      startY: e.clientY,
-      thresholdReached: false,
-    }
-  }, [])
+  }, []) // empty deps — register once on mount, use refs for current values
 
   // Build a mapping from colKey to its JSON group.field for extracting raw values
   const colKeyToJsonPath = useMemo(() => {
