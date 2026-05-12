@@ -7,6 +7,7 @@ import {
   Search,
   X,
   GripVertical,
+  ListPlus,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { MultiValueDialog } from '@/components/shared/multi-value-dialog'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,7 @@ interface SearchCondition {
   label: string
   operator: 'includes' | 'excludes' | 'equals' | 'notEquals'
   value: string
+  values: string[]
 }
 
 interface TagGroup {
@@ -220,6 +223,7 @@ export default function EquipmentSearch({ onSearch, isSearching }: EquipmentSear
   const [conditions, setConditions] = useState<SearchCondition[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [activeTagCloudGroup, setActiveTagCloudGroup] = useState('main')
+  const [multiValueDialog, setMultiValueDialog] = useState<string | null>(null) // condition id
 
   // ── Condition management ────────────────────────────────────────────────
 
@@ -238,6 +242,7 @@ export default function EquipmentSearch({ onSearch, isSearching }: EquipmentSear
           label: tag.label,
           operator: 'includes',
           value: '',
+          values: [],
         },
       ]
     })
@@ -268,11 +273,19 @@ export default function EquipmentSearch({ onSearch, isSearching }: EquipmentSear
     )
   }, [])
 
+  const updateConditionValues = useCallback((conditionId: string, values: string[]) => {
+    setConditions((prev) =>
+      prev.map((c) => (c.id === conditionId ? { ...c, values } : c)),
+    )
+  }, [])
+
   // ── Search actions ─────────────────────────────────────────────────────
 
   const handleSearch = useCallback(() => {
-    // Only include conditions that have a non-empty value
-    const activeConditions = conditions.filter((c) => c.value.trim() !== '')
+    // Only include conditions that have a non-empty value or multiple values
+    const activeConditions = conditions.filter(
+      (c) => c.value.trim() !== '' || c.values.length > 0,
+    )
     onSearch(activeConditions)
   }, [conditions, onSearch])
 
@@ -517,75 +530,140 @@ export default function EquipmentSearch({ onSearch, isSearching }: EquipmentSear
                     <div className="p-3 space-y-2">
                       {conditions.map((condition) => {
                         const color = getGroupColor(condition.field)
+                        const hasMultiValues = condition.values.length > 0
                         return (
                           <div
                             key={condition.id}
-                            className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border bg-card p-2.5 shadow-sm transition-shadow hover:shadow"
+                            className="flex flex-col rounded-lg border bg-card p-2.5 shadow-sm transition-shadow hover:shadow"
                           >
-                            {/* Field badge */}
-                            <Badge
-                              variant="outline"
-                              className="shrink-0 text-xs font-medium border bg-background min-w-[120px] justify-center"
-                              style={{
-                                borderColor: color + '88',
-                                color: '#1f2937',
-                              }}
-                            >
-                              {condition.label}
-                            </Badge>
+                            {/* Main row */}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                              {/* Field badge */}
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 text-xs font-medium border bg-background min-w-[120px] justify-center"
+                                style={{
+                                  borderColor: color + '88',
+                                  color: '#1f2937',
+                                }}
+                              >
+                                {condition.label}
+                              </Badge>
 
-                            {/* Operator */}
-                            <Select
-                              value={condition.operator}
-                              onValueChange={(v) =>
-                                updateConditionOperator(
-                                  condition.id,
-                                  v as SearchCondition['operator'],
-                                )
-                              }
-                            >
-                              <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {operatorOptions.map((opt) => (
-                                  <SelectItem
-                                    key={opt.value}
-                                    value={opt.value}
-                                    className="text-xs"
-                                  >
-                                    {opt.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-
-                            {/* Value input */}
-                            <Input
-                              placeholder='Используйте * для частичного совпадения'
-                              value={condition.value}
-                              onChange={(e) =>
-                                updateConditionValue(
-                                  condition.id,
-                                  e.target.value,
-                                )
-                              }
-                              className="flex-1 h-8 text-xs"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSearch()
+                              {/* Operator */}
+                              <Select
+                                value={condition.operator}
+                                onValueChange={(v) =>
+                                  updateConditionOperator(
+                                    condition.id,
+                                    v as SearchCondition['operator'],
+                                  )
                                 }
-                              }}
-                            />
+                              >
+                                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {operatorOptions.map((opt) => (
+                                    <SelectItem
+                                      key={opt.value}
+                                      value={opt.value}
+                                      className="text-xs"
+                                    >
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
 
-                            {/* Remove button */}
-                            <button
-                              onClick={() => removeCondition(condition.id)}
-                              className="shrink-0 rounded-md p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                              title="Удалить условие"
-                            >
-                              <X className="size-3.5" />
-                            </button>
+                              {/* Value input */}
+                              <Input
+                                placeholder={
+                                  hasMultiValues
+                                    ? 'Доп. фильтр или оставьте пустым'
+                                    : 'Используйте * для частичного совпадения'
+                                }
+                                value={condition.value}
+                                onChange={(e) =>
+                                  updateConditionValue(
+                                    condition.id,
+                                    e.target.value,
+                                  )
+                                }
+                                className="flex-1 h-8 text-xs"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleSearch()
+                                  }
+                                }}
+                              />
+
+                              {/* Multi-value button */}
+                              <button
+                                onClick={() => setMultiValueDialog(condition.id)}
+                                className={`shrink-0 rounded-md p-1.5 transition-colors ${
+                                  hasMultiValues
+                                    ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-950 dark:text-orange-300'
+                                    : 'hover:bg-muted text-muted-foreground'
+                                }`}
+                                title={
+                                  hasMultiValues
+                                    ? `${condition.values.length} значений — нажмите для редактирования`
+                                    : 'Добавить несколько значений'
+                                }
+                              >
+                                <ListPlus className="size-3.5" />
+                              </button>
+
+                              {/* Remove button */}
+                              <button
+                                onClick={() => removeCondition(condition.id)}
+                                className="shrink-0 rounded-md p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                title="Удалить условие"
+                              >
+                                <X className="size-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Multi-value badges row */}
+                            {hasMultiValues && (
+                              <div className="flex flex-wrap gap-1 pl-[128px] sm:pl-0 mt-1">
+                                {condition.values.map((val, idx) => (
+                                  <Badge
+                                    key={idx}
+                                    variant="secondary"
+                                    className="text-[10px] font-normal px-1.5 py-0 gap-0.5"
+                                    style={{
+                                      backgroundColor: color + '18',
+                                      borderColor: color + '44',
+                                      borderWidth: 1,
+                                    }}
+                                  >
+                                    <span className="max-w-[160px] truncate">
+                                      {val}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        const newValues = condition.values.filter(
+                                          (_, i) => i !== idx,
+                                        )
+                                        updateConditionValues(
+                                          condition.id,
+                                          newValues,
+                                        )
+                                      }}
+                                      className="shrink-0 rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
+                                    >
+                                      <X className="size-2.5" />
+                                    </button>
+                                  </Badge>
+                                ))}
+                                <span className="text-[10px] text-muted-foreground self-center ml-1">
+                                  {condition.values.length} знач. (ИЛИ)
+                                </span>
+                              </div>
+                            )}
                           </div>
                         )
                       })}
@@ -628,6 +706,23 @@ export default function EquipmentSearch({ onSearch, isSearching }: EquipmentSear
           </CardContent>
         </Card>
       )}
+
+      {/* Multi-value dialog */}
+      {multiValueDialog && (() => {
+        const cond = conditions.find((c) => c.id === multiValueDialog)
+        if (!cond) return null
+        const color = getGroupColor(cond.field)
+        return (
+          <MultiValueDialog
+            open={!!multiValueDialog}
+            onOpenChange={(open) => !open && setMultiValueDialog(null)}
+            fieldLabel={cond.label}
+            fieldColor={color}
+            values={cond.values}
+            onValuesChange={(vals) => updateConditionValues(cond.id, vals)}
+          />
+        )
+      })()}
     </div>
   )
 }

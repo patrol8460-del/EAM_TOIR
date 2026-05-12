@@ -18,6 +18,7 @@ interface SearchCondition {
   field: string
   operator: 'includes' | 'excludes' | 'equals' | 'notEquals' | 'greaterThan' | 'lessThan'
   value: string | number | boolean
+  values?: (string | number | boolean)[]
 }
 
 // ========== Field Definitions ==========
@@ -300,7 +301,16 @@ export async function POST(request: NextRequest) {
     // --- Apply all filters in-memory (case-insensitive via toLowerCase) ---
     if (memoryConditions.length > 0) {
       records = records.filter((record) =>
-        memoryConditions.every((cond) => matchesInMemory(record, cond)),
+        memoryConditions.every((cond) => {
+          // Multi-value support (OR logic): condition matches if ANY value matches
+          if (cond.values && cond.values.length > 0) {
+            return cond.values.some((v) =>
+              matchesInMemory(record, { ...cond, value: v }),
+            )
+          }
+          // Single value fallback
+          return matchesInMemory(record, cond)
+        }),
       )
     }
 
