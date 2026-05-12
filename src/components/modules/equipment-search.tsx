@@ -625,41 +625,17 @@ export default function EquipmentSearch({ onSearch, isSearching }: EquipmentSear
                               </button>
                             </div>
 
-                            {/* Multi-value badges row */}
+                            {/* Multi-value count */}
                             {hasMultiValues && (
-                              <div className="flex flex-wrap gap-1 pl-[128px] sm:pl-0 mt-1">
-                                {condition.values.map((val, idx) => (
-                                  <Badge
-                                    key={idx}
-                                    variant="secondary"
-                                    className="text-[10px] font-normal px-1.5 py-0 gap-0.5"
-                                    style={{
-                                      backgroundColor: color + '18',
-                                      borderColor: color + '44',
-                                      borderWidth: 1,
-                                    }}
-                                  >
-                                    <span className="max-w-[160px] truncate">
-                                      {val}
-                                    </span>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        const newValues = condition.values.filter(
-                                          (_, i) => i !== idx,
-                                        )
-                                        updateConditionValues(
-                                          condition.id,
-                                          newValues,
-                                        )
-                                      }}
-                                      className="shrink-0 rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
-                                    >
-                                      <X className="size-2.5" />
-                                    </button>
-                                  </Badge>
-                                ))}
-                                <span className="text-[10px] text-muted-foreground self-center ml-1">
+                              <div className="pl-[128px] sm:pl-0 mt-0.5">
+                                <span
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded"
+                                  style={{
+                                    backgroundColor: color + '15',
+                                    color: '#374151',
+                                  }}
+                                >
+                                  <ListPlus className="size-3" />
                                   {condition.values.length} знач. (ИЛИ)
                                 </span>
                               </div>
