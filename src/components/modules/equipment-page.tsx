@@ -93,6 +93,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/store/auth-store'
 import {
   DndContext,
   MouseSensor,
@@ -448,7 +449,7 @@ const COLUMN_GROUPS = ['Основное', 'Идентификация', 'Фла
 const DEFAULT_VISIBLE_COLUMNS = ['code', 'name', 'status', 'criticality', 'department', 'equipmentType']
 
 const STORAGE_KEY = 'eam-equipment-columns'
-const PRESETS_STORAGE_KEY = 'eam-equipment-presets'
+const PRESETS_STORAGE_KEY_PREFIX = 'eam-equipment-presets-'
 
 // ── Column/Filter Presets ──────────────────────────
 interface ViewPreset {
@@ -465,11 +466,11 @@ interface ViewPreset {
   updatedAt: number
 }
 
-function loadPresets(): ViewPreset[] {
-  try { return JSON.parse(localStorage.getItem(PRESETS_STORAGE_KEY) || '[]') } catch { return [] }
+function loadPresets(userId: string): ViewPreset[] {
+  try { return JSON.parse(localStorage.getItem(PRESETS_STORAGE_KEY_PREFIX + userId) || '[]') } catch { return [] }
 }
-function savePresetsToStorage(presets: ViewPreset[]) {
-  try { localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets)) } catch { /* ignore */ }
+function savePresetsToStorage(presets: ViewPreset[], userId: string) {
+  try { localStorage.setItem(PRESETS_STORAGE_KEY_PREFIX + userId, JSON.stringify(presets)) } catch { /* ignore */ }
 }
 
 // ── Sortable Column Header (uses @dnd-kit) ──
@@ -620,6 +621,8 @@ function SortableColumnHeader({
 }
 
 export default function EquipmentPage() {
+  const currentUser = useAuthStore((s) => s.user)
+  const userId = currentUser?.id || '__anonymous__'
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [items, setItems] = useState<EquipmentItem[]>([])
@@ -779,8 +782,14 @@ export default function EquipmentPage() {
   const [exporting, setExporting] = useState(false)
 
   // ── View Presets state ──
-  const [presets, setPresets] = useState<ViewPreset[]>(loadPresets)
+  const [presets, setPresets] = useState<ViewPreset[]>(() => loadPresets(userId))
   const [activePresetId, setActivePresetId] = useState<string | null>(null)
+
+  // Reload presets when user changes (different user = different preset set)
+  useEffect(() => {
+    setPresets(loadPresets(userId))
+    setActivePresetId(null)
+  }, [userId])
   const [presetMenuOpen, setPresetMenuOpen] = useState(false)
   const [savePresetDialogOpen, setSavePresetDialogOpen] = useState(false)
   const [newPresetName, setNewPresetName] = useState('')
@@ -788,8 +797,8 @@ export default function EquipmentPage() {
 
   const persistPresets = useCallback((next: ViewPreset[]) => {
     setPresets(next)
-    savePresetsToStorage(next)
-  }, [])
+    savePresetsToStorage(next, userId)
+  }, [userId])
 
   // Build a snapshot of the current view state (plain fn to avoid TDZ with later-declared sortKey/sortDir/colFilters)
   const captureCurrentView = (): Omit<ViewPreset, 'id' | 'name' | 'createdAt' | 'updatedAt'> => {
