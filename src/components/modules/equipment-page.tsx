@@ -33,6 +33,11 @@ import {
   ChevronUp,
   ChevronDown,
   GripVertical,
+  BookmarkPlus,
+  Bookmark,
+  BookmarkCheck,
+  Copy,
+  PencilRuler,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -443,6 +448,29 @@ const COLUMN_GROUPS = ['Основное', 'Идентификация', 'Фла
 const DEFAULT_VISIBLE_COLUMNS = ['code', 'name', 'status', 'criticality', 'department', 'equipmentType']
 
 const STORAGE_KEY = 'eam-equipment-columns'
+const PRESETS_STORAGE_KEY = 'eam-equipment-presets'
+
+// ── Column/Filter Presets ──────────────────────────
+interface ViewPreset {
+  id: string
+  name: string
+  columns: string[]
+ search: string
+  statusFilter: string
+  sortKey: string | null
+  sortDir: 'asc' | 'desc' | null
+  colFilters: Record<string, string[]> // serialized Set
+  advancedConditions: { field: string; operator: string; value: string }[]
+  createdAt: number
+  updatedAt: number
+}
+
+function loadPresets(): ViewPreset[] {
+  try { return JSON.parse(localStorage.getItem(PRESETS_STORAGE_KEY) || '[]') } catch { return [] }
+}
+function savePresetsToStorage(presets: ViewPreset[]) {
+  try { localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets)) } catch { /* ignore */ }
+}
 
 // ── Sortable Column Header (uses @dnd-kit) ──
 function SortableColumnHeader({
@@ -749,6 +777,137 @@ export default function EquipmentPage() {
 
   const visibleOptionalCount = visibleOptionalCols.length
   const [exporting, setExporting] = useState(false)
+
+  // ── View Presets state ──
+  const [presets, setPresets] = useState<ViewPreset[]>(loadPresets)
+  const [activePresetId, setActivePresetId] = useState<string | null>(null)
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false)
+  const [savePresetDialogOpen, setSavePresetDialogOpen] = useState(false)
+  const [newPresetName, setNewPresetName] = useState('')
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
+
+  const persistPresets = useCallback((next: ViewPreset[]) => {
+    setPresets(next)
+    savePresetsToStorage(next)
+  }, [])
+
+  // Build a snapshot of the current view state
+  const captureCurrentView = useCallback((): Omit<ViewPreset, 'id' | 'name' | 'createdAt' | 'updatedAt'> => {
+    return {
+      columns: [...visibleOptionalCols],
+      search,
+      statusFilter,
+      sortKey,
+      sortDir,
+      colFilters: Object.fromEntries(Object.entries(colFilters).map(([k, v]) => [k, [...v]])),
+      advancedConditions: [...lastAdvancedConditionsRef.current],
+    }
+  }, [visibleOptionalCols, search, statusFilter, sortKey, sortDir, colFilters])
+
+  const applyPreset = useCallback((preset: ViewPreset) => {
+    // Columns
+    saveColumns(preset.columns)
+    // Search
+    setSearch(preset.search)
+    setStatusFilter(preset.statusFilter)
+    // Sort
+    setSortKey(preset.sortKey)
+    setSortDir(preset.sortDir)
+    // Column filters
+    const restoredFilters: Record<string, Set<string>> = {}
+    Object.entries(preset.colFilters).forEach(([k, vals]) => {
+      if (vals.length > 0) restoredFilters[k] = new Set(vals)
+    })
+    setColFilters(restoredFilters)
+    // Advanced conditions — re-run search
+    if (preset.advancedConditions.length > 0) {
+      lastAdvancedConditionsRef.current = preset.advancedConditions
+      handleAdvancedSearch(preset.advancedConditions)
+    }
+    setActivePresetId(preset.id)
+    setPresetMenuOpen(false)
+    toast.success(`Пресет «${preset.name}» применён`)
+  }, [saveColumns, handleAdvancedSearch])
+
+  const saveNewPreset = useCallback(() => {
+    const name = newPresetName.trim()
+    if (!name) return
+    const view = captureCurrentView()
+    const now = Date.now()
+    const preset: ViewPreset = {
+      id: `p_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      ...view,
+      createdAt: now,
+      updatedAt: now,
+    }
+    const next = [...presets, preset]
+    persistPresets(next)
+    setActivePresetId(preset.id)
+    setNewPresetName('')
+    setSavePresetDialogOpen(false)
+    setPresetMenuOpen(false)
+    toast.success(`Пресет «${name}» сохранён`)
+  }, [newPresetName, presets, captureCurrentView, persistPresets])
+
+  const updateCurrentPreset = useCallback(() => {
+    if (!activePresetId) return
+    const preset = presets.find((p) => p.id === activePresetId)
+    if (!preset) return
+    const view = captureCurrentView()
+    const next = presets.map((p) => p.id === activePresetId ? { ...p, ...view, updatedAt: Date.now() } : p)
+    persistPresets(next)
+    setPresetMenuOpen(false)
+    toast.success(`Пресет «${preset.name}» обновлён`)
+  }, [activePresetId, presets, captureCurrentView, persistPresets])
+
+  const deletePreset = useCallback((id: string) => {
+    const preset = presets.find((p) => p.id === id)
+    const next = presets.filter((p) => p.id !== id)
+    persistPresets(next)
+    if (activePresetId === id) setActivePresetId(null)
+    setPresetMenuOpen(false)
+    if (preset) toast.success(`Пресет «${preset.name}» удалён`)
+  }, [presets, activePresetId, persistPresets])
+
+  const openSaveDialog = useCallback((editId?: string) => {
+    if (editId) {
+      const p = presets.find((pr) => pr.id === editId)
+      setNewPresetName(p?.name || '')
+      setEditingPresetId(editId)
+    } else {
+      setNewPresetName('')
+      setEditingPresetId(null)
+    }
+    setSavePresetDialogOpen(true)
+  }, [presets])
+
+  const renamePreset = useCallback(() => {
+    if (!editingPresetId || !newPresetName.trim()) return
+    const next = presets.map((p) => p.id === editingPresetId ? { ...p, name: newPresetName.trim(), updatedAt: Date.now() } : p)
+    persistPresets(next)
+    setNewPresetName('')
+    setEditingPresetId(null)
+    setSavePresetDialogOpen(false)
+    setPresetMenuOpen(false)
+    toast.success('Пресет переименован')
+  }, [editingPresetId, newPresetName, presets, persistPresets])
+
+  const duplicatePreset = useCallback((id: string) => {
+    const preset = presets.find((p) => p.id === id)
+    if (!preset) return
+    const now = Date.now()
+    const copy: ViewPreset = {
+      ...preset,
+      id: `p_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      name: `${preset.name} (копия)`,
+      createdAt: now,
+      updatedAt: now,
+    }
+    persistPresets([...presets, copy])
+    setPresetMenuOpen(false)
+    toast.success(`Пресет «${copy.name}» создан`)
+  }, [presets, persistPresets])
 
   // ── Column sort & filter state ──
   const [sortKey, setSortKey] = useState<string | null>(null)
@@ -1730,6 +1889,76 @@ export default function EquipmentPage() {
               Изменить список атрибутов
               <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px] rounded-full">{visibleOptionalCount}</Badge>
             </Button>
+            {/* View Presets dropdown */}
+            <DropdownMenu open={presetMenuOpen} onOpenChange={setPresetMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`gap-1.5 text-xs font-medium h-7 px-2.5 border-border/60 bg-background hover:bg-accent ${activePresetId ? 'border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100' : ''}`}
+                >
+                  {activePresetId ? <BookmarkCheck className="size-3.5 text-orange-600" /> : <Bookmark className="size-3.5" />}
+                  Пресеты
+                  {presets.length > 0 && (
+                    <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px] rounded-full">{presets.length}</Badge>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 max-h-[420px] overflow-y-auto">
+                {/* Save current view as new preset */}
+                <DropdownMenuItem onClick={() => openSaveDialog()} className="gap-2 text-orange-600 focus:text-orange-600">
+                  <BookmarkPlus className="size-4" />
+                  <span className="font-medium">Сохранить текущий вид</span>
+                </DropdownMenuItem>
+                {/* Update active preset */}
+                {activePresetId && (() => {
+                  const ap = presets.find((p) => p.id === activePresetId)
+                  return ap ? (
+                    <DropdownMenuItem onClick={updateCurrentPreset} className="gap-2">
+                      <Copy className="size-4" />
+                      <span>Обновить «{ap.name}»</span>
+                    </DropdownMenuItem>
+                  ) : null
+                })()}
+                {presets.length > 0 && <DropdownMenuSeparator />}
+                {/* Preset list */}
+                {presets.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">Нет сохранённых пресетов</div>
+                ) : (
+                  presets.map((preset) => {
+                    const isActive = preset.id === activePresetId
+                    return (
+                      <DropdownMenuSub key={preset.id}>
+                        <DropdownMenuSubTrigger className={`gap-2 ${isActive ? 'bg-orange-50 text-orange-700' : ''}`}>
+                          {isActive ? <BookmarkCheck className="size-3.5 text-orange-600 shrink-0" /> : <Bookmark className="size-3.5 text-muted-foreground shrink-0" />}
+                          <span className="truncate flex-1 min-w-0 font-medium">{preset.name}</span>
+                          <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{preset.columns.length} стб.</span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-48">
+                          <DropdownMenuItem onClick={() => applyPreset(preset)} className="gap-2">
+                            <Eye className="size-3.5" />
+                            Применить
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openSaveDialog(preset.id)} className="gap-2">
+                            <PencilRuler className="size-3.5" />
+                            Переименовать
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => duplicatePreset(preset.id)} className="gap-2">
+                            <Copy className="size-3.5" />
+                            Дублировать
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => deletePreset(preset.id)} className="gap-2 text-destructive focus:text-destructive">
+                            <Trash2 className="size-3.5" />
+                            Удалить
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    )
+                  })
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Active sort & filter indicators */}
@@ -1879,6 +2108,47 @@ export default function EquipmentPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Save/Rename Preset Dialog ──────────────────────────── */}
+      <Dialog open={savePresetDialogOpen} onOpenChange={(open) => { if (!open) { setSavePresetDialogOpen(false); setNewPresetName(''); setEditingPresetId(null) } }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookmarkPlus className="size-5 text-orange-600" />
+              {editingPresetId ? 'Переименовать пресет' : 'Сохранить пресет'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingPresetId
+                ? 'Введите новое имя для пресета.'
+                : `Сохранить текущие настройки отображения: ${visibleOptionalCount} столбцов${sortKey ? ', сортировка' : ''}${Object.keys(colFilters).length > 0 ? ', фильтры' : ''}${search ? ', поиск' : ''}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label htmlFor="preset-name" className="text-sm font-medium">Название пресета</Label>
+            <Input
+              id="preset-name"
+              value={newPresetName}
+              onChange={(e) => setNewPresetName(e.target.value)}
+              placeholder="Например: ТО электриков — полный обзор"
+              className="mt-1.5"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); editingPresetId ? renamePreset() : saveNewPreset() } }}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setSavePresetDialogOpen(false); setNewPresetName(''); setEditingPresetId(null) }}>
+              Отмена
+            </Button>
+            <Button
+              onClick={editingPresetId ? renamePreset : saveNewPreset}
+              disabled={!newPresetName.trim()}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {editingPresetId ? 'Переименовать' : 'Сохранить'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Import from Excel Dialog ──────────────────────────── */}
       <Dialog open={importDialogOpen} onOpenChange={(open) => { if (!open) handleImportClose(); else setImportDialogOpen(true) }}>
