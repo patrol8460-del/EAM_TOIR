@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { Wrench, Mail, Lock, Eye, EyeOff, Info } from 'lucide-react'
 
 const demoCredentials = [
@@ -27,19 +27,16 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const loginAttempted = useRef(false)
 
-  const doLogin = useCallback(async (loginEmail: string, loginPassword: string) => {
-    console.log('[LOGIN] doLogin called', { loginEmail, loading })
-    if (loading) {
-      console.log('[LOGIN] blocked: loading is true')
-      return
-    }
+  // Keep a ref so async callbacks always see the latest onLogin
+  const onLoginRef = useRef(onLogin)
+  onLoginRef.current = onLogin
+
+  async function doLogin(loginEmail: string, loginPassword: string) {
     setLoading(true)
     setError('')
 
     try {
-      console.log('[LOGIN] fetching...')
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,15 +44,12 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       })
 
-      console.log('[LOGIN] response status:', res.status)
-
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Ошибка авторизации')
       }
 
       const data = await res.json()
-      console.log('[LOGIN] success, user:', data.user?.email)
 
       // Store session in localStorage for iframe / cookie-blocked environments
       try {
@@ -63,25 +57,21 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         localStorage.setItem('session_user', JSON.stringify(data.user))
         localStorage.setItem('login_email', loginEmail)
         localStorage.setItem('login_password', loginPassword)
-        console.log('[LOGIN] localStorage saved')
-      } catch (e) {
-        console.warn('[LOGIN] localStorage failed:', e)
-      }
+      } catch { /* ignore */ }
 
-      // Notify parent instead of reloading
-      console.log('[LOGIN] onLogin exists:', !!onLogin)
-      if (onLogin) {
-        onLogin(data.user)
+      // Notify parent
+      const cb = onLoginRef.current
+      if (cb) {
+        cb(data.user)
       } else {
         window.location.replace('/')
       }
     } catch (err) {
-      console.error('[LOGIN] error:', err)
       setError(err instanceof Error ? err.message : 'Произошла ошибка при входе')
     } finally {
       setLoading(false)
     }
-  }, [loading, onLogin])
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -92,26 +82,8 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     setEmail(demoEmail)
     setPassword(demoPassword)
     setError('')
-    // Submit directly, don't rely on form.requestSubmit()
     doLogin(demoEmail, demoPassword)
   }
-
-  // Auto-login if credentials stored in localStorage (for iframe environments)
-  const fillAutoLogin = (demoEmail: string, demoPassword: string) => {
-    setEmail(demoEmail)
-    setPassword(demoPassword)
-    setError('')
-    if (!loginAttempted.current) {
-      loginAttempted.current = true
-      // Small delay to let state settle
-      setTimeout(() => {
-        doLogin(demoEmail, demoPassword)
-      }, 100)
-    }
-  }
-
-  // On mount, check if we have stored credentials and auto-login
-  // This is handled via the fillAutoLogin callback from parent if needed
 
   return (
     <div style={{ width: '100%', maxWidth: '448px', position: 'relative', zIndex: 10 }}>
@@ -281,6 +253,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
                 key={cred.email}
                 type="button"
                 onClick={() => fillAndSubmitDemo(cred.email, cred.password)}
+                disabled={loading}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -290,8 +263,9 @@ export function LoginForm({ onLogin }: LoginFormProps) {
                   border: '1px solid #e5e7eb',
                   background: '#fff',
                   padding: '8px 12px',
-                  cursor: 'pointer',
+                  cursor: loading ? 'not-allowed' : 'pointer',
                   textAlign: 'left',
+                  opacity: loading ? 0.6 : 1,
                 }}
               >
                 <div>
