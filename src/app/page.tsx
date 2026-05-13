@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { LoginForm } from '@/components/auth/login-form'
 import { useAuthStore } from '@/store/auth-store'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 // SSR-safe: AppShell is loaded client-side only to avoid hydration issues with localStorage
 const AppShell = dynamic(
@@ -87,5 +88,9 @@ export default function Home() {
     )
   }
 
-  return <AppShell user={user} onLogout={handleLogout} />
+  return (
+    <ErrorBoundary>
+      <AppShell user={user} onLogout={handleLogout} />
+    </ErrorBoundary>
+  )
 }
