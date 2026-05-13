@@ -1,9 +1,15 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { LoginForm } from '@/components/auth/login-form'
-import { AppShell } from '@/components/layout/app-shell'
 import { useAuthStore } from '@/store/auth-store'
+
+// SSR-safe: AppShell is loaded client-side only to avoid hydration issues with localStorage
+const AppShell = dynamic(
+  () => import('@/components/layout/app-shell').then((m) => m.AppShell),
+  { ssr: false }
+)
 
 interface User {
   id: string
@@ -14,7 +20,6 @@ interface User {
 }
 
 export default function Home() {
-  // Start with null to match SSR output — load from localStorage in useEffect
   const [user, setUser] = useState<User | null>(null)
 
   const storeSetUser = useAuthStore((s) => s.setUser)
@@ -39,7 +44,6 @@ export default function Home() {
         headers: { Authorization: `Bearer ${storedUser.id}` },
       }).then(res => {
         if (res.ok) return
-        // Session invalid — clear
         localStorage.removeItem('session_token')
         localStorage.removeItem('session_user')
         localStorage.removeItem('login_email')
