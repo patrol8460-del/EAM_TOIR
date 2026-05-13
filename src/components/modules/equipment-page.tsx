@@ -1276,9 +1276,15 @@ export default function EquipmentPage() {
           supervisionData: parseJSON<SupervisionData>(item.supervisionData as string | null),
         }))
         setItems(parsed as EquipmentItem[])
+      } else if (res.status === 401) {
+        // Session expired — will be handled by page.tsx session verification
+        console.warn('Equipment fetch: 401 unauthorized')
+      } else {
+        console.error('Equipment fetch failed:', res.status)
       }
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('Equipment fetch error:', err)
+      toast.error('Ошибка загрузки оборудования')
     } finally {
       setLoading(false)
     }

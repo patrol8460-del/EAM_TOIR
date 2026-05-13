@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { LoginForm } from '@/components/auth/login-form'
 import { AppShell } from '@/components/layout/app-shell'
 import { useAuthStore } from '@/store/auth-store'
@@ -33,8 +33,8 @@ export default function Home() {
     if (user) storeSetUser(user)
   })
 
-  // Verify session in background (optional, non-blocking)
-  useCallback(() => {
+  // Verify session in background on mount and when user changes
+  useEffect(() => {
     if (!user) return
     fetch('/api/auth/me', {
       headers: user ? { Authorization: `Bearer ${user.id}` } : {},
