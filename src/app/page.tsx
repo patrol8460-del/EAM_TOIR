@@ -33,22 +33,28 @@ export default function Home() {
     if (user) storeSetUser(user)
   })
 
-  // Verify session in background on mount and when user changes
+  // Verify session in background on mount only (not on user change, to avoid logout loops)
   useEffect(() => {
-    if (!user) return
-    fetch('/api/auth/me', {
-      headers: user ? { Authorization: `Bearer ${user.id}` } : {},
-    }).then(res => {
-      if (res.ok) return res.json()
-      // Session invalid — clear
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('session_user')
-      localStorage.removeItem('login_email')
-      localStorage.removeItem('login_password')
-      setUser(null)
-      storeSetUser(null)
-    }).catch(() => { /* network error, keep local session */ })
-  }, [user, storeSetUser])
+    const stored = localStorage.getItem('session_user')
+    if (!stored) return
+    try {
+      const parsed = JSON.parse(stored)
+      if (!parsed?.id) return
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${parsed.id}` },
+      }).then(res => {
+        if (res.ok) return
+        // Session invalid — clear
+        localStorage.removeItem('session_token')
+        localStorage.removeItem('session_user')
+        localStorage.removeItem('login_email')
+        localStorage.removeItem('login_password')
+        setUser(null)
+        storeSetUser(null)
+      }).catch(() => { /* network error, keep local session */ })
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleLogin = useCallback((loggedInUser: User) => {
     setUser(loggedInUser)
