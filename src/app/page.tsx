@@ -6,11 +6,27 @@ import { LoginForm } from '@/components/auth/login-form'
 import { useAuthStore } from '@/store/auth-store'
 import { ErrorBoundary } from '@/components/error-boundary'
 
-// SSR-safe: AppShell is loaded client-side only to avoid hydration issues with localStorage
+// SSR-safe: AppShell is loaded client-side only
 const AppShell = dynamic(
   () => import('@/components/layout/app-shell').then((m) => m.AppShell),
-  { ssr: false }
+  { ssr: false, loading: () => <AppLoader /> }
 )
+
+function AppLoader() {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#f9fafb',
+    }}>
+      <div style={{ textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
+        Загрузка...
+      </div>
+    </div>
+  )
+}
 
 interface User {
   id: string
@@ -22,11 +38,13 @@ interface User {
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
+  const [mounted, setMounted] = useState(false)
 
   const storeSetUser = useAuthStore((s) => s.setUser)
 
-  // Load session from localStorage on mount + verify with server
+  // Load session from localStorage on mount
   useEffect(() => {
+    setMounted(true)
     let storedUser: User | null = null
     try {
       const stored = localStorage.getItem('session_user')
@@ -39,19 +57,6 @@ export default function Home() {
     if (storedUser) {
       setUser(storedUser)
       storeSetUser(storedUser)
-
-      // Verify session in background
-      fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${storedUser.id}` },
-      }).then(res => {
-        if (res.ok) return
-        localStorage.removeItem('session_token')
-        localStorage.removeItem('session_user')
-        localStorage.removeItem('login_email')
-        localStorage.removeItem('login_password')
-        setUser(null)
-        storeSetUser(null)
-      }).catch(() => { /* network error, keep local session */ })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -72,6 +77,19 @@ export default function Home() {
     } catch { /* ignore */ }
     fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
   }, [storeSetUser])
+
+  // Before mount — render nothing (matches SSR)
+  if (!mounted) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #0F1B2D 0%, #162236 50%, #1a2a42 100%)',
+      }} />
+    )
+  }
 
   if (!user) {
     return (
