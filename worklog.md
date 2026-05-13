@@ -1015,3 +1015,22 @@ Stage Summary:
 - Presets stored in localStorage, survive page reload
 - All view state captured and restored: columns, search, filters, sort, advanced conditions
 
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix presets button visibility and seed database with 50 equipment items
+
+Work Log:
+- Identified root cause: presets DropdownMenu was outside the flex container div, rendered invisible
+- Wrapped "Изменить список атрибутов" and "Пресеты" buttons in shared flex div with gap-2
+- Database was empty - seeded 50 equipment items with full attributes
+- Seeded 5 departments, 8 equipment types, 3 demo users
+- Old server process was stale - killed and rebuilt with start.sh
+- Verified API returns 50 items and JS chunk contains "Пресеты" text
+
+Stage Summary:
+- Presets button now visible in toolbar (right side, next to column config button)
+- 50 equipment items in database with locations, responsibility, maintenance data
+- Demo users: admin@enterprise.ru, manager@enterprise.ru, engineer@enterprise.ru
+- Server running on port 3000 via start.sh keepalive
+
