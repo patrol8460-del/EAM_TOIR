@@ -1195,6 +1195,10 @@ export default function EquipmentPage() {
     }
   }, [items, sortKey, sortDir, colFilters, cellText])
 
+  // Keep a ref that always mirrors the latest selectedIds (avoids stale closures in async callbacks)
+  const selectedIdsRef = useRef<Set<string>>(new Set())
+  selectedIdsRef.current = selectedIds
+
   // ── Excel Export (server-side via API — no xlsx on client) ──
   // If checkboxes are selected → export only checked rows; otherwise → export all
   const handleExportExcel = useCallback(async () => {
@@ -1202,8 +1206,9 @@ export default function EquipmentPage() {
       toast.error('Нет данных для экспорта')
       return
     }
-    const exportItems = selectedIds.size > 0
-      ? displayItems.filter((item) => selectedIds.has(item.id))
+    const currentSelection = selectedIdsRef.current
+    const exportItems = currentSelection.size > 0
+      ? displayItems.filter((item) => currentSelection.has(item.id))
       : displayItems
     if (exportItems.length === 0) {
       toast.error('Нет выбранных записей для экспорта')
@@ -1234,7 +1239,7 @@ export default function EquipmentPage() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       const total = displayItems.length
-      toast.success(selectedIds.size > 0
+      toast.success(currentSelection.size > 0
         ? `Экспортировано ${exportItems.length} из ${total} записей`
         : `Экспортировано ${total} записей`)
     } catch (err) {
@@ -1243,7 +1248,7 @@ export default function EquipmentPage() {
     } finally {
       setExporting(false)
     }
-  }, [displayItems, activeColumns, cellText, selectedIds])
+  }, [displayItems, activeColumns, cellText])
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set())
