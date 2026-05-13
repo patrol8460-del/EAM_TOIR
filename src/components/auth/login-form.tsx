@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Wrench, Mail, Lock, Eye, EyeOff, Info } from 'lucide-react'
 
 const demoCredentials = [
@@ -28,11 +28,8 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Keep a ref so async callbacks always see the latest onLogin
-  const onLoginRef = useRef(onLogin)
-  onLoginRef.current = onLogin
-
-  async function doLogin(loginEmail: string, loginPassword: string) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setLoading(true)
     setError('')
 
@@ -41,7 +38,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+        body: JSON.stringify({ email, password }),
       })
 
       if (!res.ok) {
@@ -55,15 +52,15 @@ export function LoginForm({ onLogin }: LoginFormProps) {
       try {
         localStorage.setItem('session_token', data.user.id)
         localStorage.setItem('session_user', JSON.stringify(data.user))
-        localStorage.setItem('login_email', loginEmail)
-        localStorage.setItem('login_password', loginPassword)
-      } catch { /* ignore */ }
+        localStorage.setItem('login_email', email)
+        localStorage.setItem('login_password', password)
+      } catch { /* localStorage may be blocked */ }
 
-      // Notify parent
-      const cb = onLoginRef.current
-      if (cb) {
-        cb(data.user)
+      // Notify parent instead of reloading
+      if (onLogin) {
+        onLogin(data.user)
       } else {
+        // Fallback: reload page
         window.location.replace('/')
       }
     } catch (err) {
@@ -73,16 +70,21 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    doLogin(email, password)
+  const fillDemo = (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail)
+    setPassword(demoPassword)
+    setError('')
   }
 
   const fillAndSubmitDemo = (demoEmail: string, demoPassword: string) => {
     setEmail(demoEmail)
     setPassword(demoPassword)
     setError('')
-    doLogin(demoEmail, demoPassword)
+    // Auto-submit on next tick
+    setTimeout(() => {
+      const form = document.querySelector('form') as HTMLFormElement
+      if (form) form.requestSubmit()
+    }, 50)
   }
 
   return (
@@ -253,7 +255,6 @@ export function LoginForm({ onLogin }: LoginFormProps) {
                 key={cred.email}
                 type="button"
                 onClick={() => fillAndSubmitDemo(cred.email, cred.password)}
-                disabled={loading}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -263,9 +264,8 @@ export function LoginForm({ onLogin }: LoginFormProps) {
                   border: '1px solid #e5e7eb',
                   background: '#fff',
                   padding: '8px 12px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
+                  cursor: 'pointer',
                   textAlign: 'left',
-                  opacity: loading ? 0.6 : 1,
                 }}
               >
                 <div>

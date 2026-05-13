@@ -1,32 +1,9 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import dynamic from 'next/dynamic'
 import { LoginForm } from '@/components/auth/login-form'
+import { AppShell } from '@/components/layout/app-shell'
 import { useAuthStore } from '@/store/auth-store'
-import { ErrorBoundary } from '@/components/error-boundary'
-
-// SSR-safe: AppShell loaded client-side only (contains localStorage-dependent modules)
-const AppShell = dynamic(
-  () => import('@/components/layout/app-shell').then((m) => m.AppShell),
-  { ssr: false, loading: () => <AppLoader /> }
-)
-
-function AppLoader() {
-  return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#f9fafb',
-    }}>
-      <div style={{ textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
-        Загрузка...
-      </div>
-    </div>
-  )
-}
 
 interface User {
   id: string
@@ -37,11 +14,12 @@ interface User {
 }
 
 export default function Home() {
+  // SSR-safe: always start with null (matches server prerender), load from localStorage in useEffect
   const [user, setUser] = useState<User | null>(null)
 
   const storeSetUser = useAuthStore((s) => s.setUser)
 
-  // Load session from localStorage on mount
+  // On mount: read localStorage and sync to zustand
   useEffect(() => {
     let storedUser: User | null = null
     try {
@@ -55,9 +33,21 @@ export default function Home() {
     if (storedUser) {
       setUser(storedUser)
       storeSetUser(storedUser)
+
+      // Verify session in background
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${storedUser.id}` },
+      }).then(res => {
+        if (res.ok) return
+        localStorage.removeItem('session_token')
+        localStorage.removeItem('session_user')
+        localStorage.removeItem('login_email')
+        localStorage.removeItem('login_password')
+        setUser(null)
+        storeSetUser(null)
+      }).catch(() => { /* network error, keep local session */ })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [storeSetUser])
 
   const handleLogin = useCallback((loggedInUser: User) => {
     setUser(loggedInUser)
@@ -91,9 +81,5 @@ export default function Home() {
     )
   }
 
-  return (
-    <ErrorBoundary>
-      <AppShell user={user} onLogout={handleLogout} />
-    </ErrorBoundary>
-  )
+  return <AppShell user={user} onLogout={handleLogout} />
 }
