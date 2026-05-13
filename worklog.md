@@ -993,3 +993,25 @@ Stage Summary:
 - Previous manual mouse events code completely removed
 - Key files modified: src/components/modules/equipment-page.tsx
 
+---
+Task ID: 2
+Agent: Main Agent
+Task: Implement view presets system for equipment table
+
+Work Log:
+- Added ViewPreset interface with all view state fields (columns, search, statusFilter, sortKey, sortDir, colFilters, advancedConditions)
+- Implemented localStorage persistence (key: eam-equipment-presets)
+- Added preset CRUD: saveNewPreset, applyPreset, updateCurrentPreset, deletePreset, renamePreset, duplicatePreset
+- captureCurrentView snapshot function to capture all current state
+- Added presets DropdownMenu button in table toolbar (next to "Изменить список атрибутов")
+- Sub-menus per preset: Apply, Rename, Duplicate, Delete
+- Save/Rename dialog with name input, Enter key support, state summary
+- Active preset visual indicator (orange border + BookmarkCheck icon)
+- Build verified, server deployed on port 3000
+
+Stage Summary:
+- Commit: 6ab1adb - feat: view presets for column sets, search values, and filters
+- Files: src/components/modules/equipment-page.tsx (+271 lines)
+- Presets stored in localStorage, survive page reload
+- All view state captured and restored: columns, search, filters, sort, advanced conditions
+
