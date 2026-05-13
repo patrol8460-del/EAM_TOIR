@@ -1034,3 +1034,29 @@ Stage Summary:
 - Demo users: admin@enterprise.ru, manager@enterprise.ru, engineer@enterprise.ru
 - Server running on port 3000 via start.sh keepalive
 
+
+---
+Task ID: 4
+Agent: main
+Task: Fix client-side exception preventing equipment page from rendering + verify preset button
+
+Work Log:
+- Diagnosed client-side exception: "a client-side exception has occurred"
+- Read equipment-page.tsx (2610 lines) and identified the root cause
+- Root cause: Temporal Dead Zone (TDZ) error in React useCallback hooks
+  - `captureCurrentView` (line 795) had `sortKey`, `sortDir`, `colFilters` in useCallback deps, but these const variables are declared later (line 913-915)
+  - `applyPreset` (line 807) had `handleAdvancedSearch` in useCallback deps, but it's declared later (line 1286)
+  - JavaScript const variables are in TDZ before their declaration — accessing them in a dependency array causes ReferenceError at runtime
+- Fixed by converting `captureCurrentView` and `applyPreset` from useCallback to plain functions
+  - Plain function bodies are lazy (only execute when called), so TDZ doesn't apply
+  - Also removed `captureCurrentView` from deps of `saveNewPreset` and `updateCurrentPreset`
+- Cleaned up unused eslint-disable directives
+- Verified build succeeds (0 errors)
+- Verified 50 equipment items already exist in database with rich attributes (locationData, responsibilityData, maintenanceData, etc.)
+- Deployed and restarted server
+- Committed as f8242db
+
+Stage Summary:
+- Fixed critical TDZ crash that prevented equipment page and presets button from rendering
+- Equipment list (50 items) and presets dropdown should now display correctly
+- Commit: f8242db "fix: resolve TDZ crash in equipment page preset functions"
