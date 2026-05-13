@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Wrench, Mail, Lock, Eye, EyeOff, Info } from 'lucide-react'
 
 const demoCredentials = [
@@ -27,9 +27,10 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const loginAttempted = useRef(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const doLogin = useCallback(async (loginEmail: string, loginPassword: string) => {
+    if (loading) return
     setLoading(true)
     setError('')
 
@@ -38,7 +39,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       })
 
       if (!res.ok) {
@@ -52,8 +53,8 @@ export function LoginForm({ onLogin }: LoginFormProps) {
       try {
         localStorage.setItem('session_token', data.user.id)
         localStorage.setItem('session_user', JSON.stringify(data.user))
-        localStorage.setItem('login_email', email)
-        localStorage.setItem('login_password', password)
+        localStorage.setItem('login_email', loginEmail)
+        localStorage.setItem('login_password', loginPassword)
       } catch { /* localStorage may be blocked */ }
 
       // Notify parent instead of reloading
@@ -68,24 +69,37 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [loading, onLogin])
 
-  const fillDemo = (demoEmail: string, demoPassword: string) => {
-    setEmail(demoEmail)
-    setPassword(demoPassword)
-    setError('')
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    doLogin(email, password)
   }
 
   const fillAndSubmitDemo = (demoEmail: string, demoPassword: string) => {
     setEmail(demoEmail)
     setPassword(demoPassword)
     setError('')
-    // Auto-submit on next tick
-    setTimeout(() => {
-      const form = document.querySelector('form') as HTMLFormElement
-      if (form) form.requestSubmit()
-    }, 50)
+    // Submit directly, don't rely on form.requestSubmit()
+    doLogin(demoEmail, demoPassword)
   }
+
+  // Auto-login if credentials stored in localStorage (for iframe environments)
+  const fillAutoLogin = (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail)
+    setPassword(demoPassword)
+    setError('')
+    if (!loginAttempted.current) {
+      loginAttempted.current = true
+      // Small delay to let state settle
+      setTimeout(() => {
+        doLogin(demoEmail, demoPassword)
+      }, 100)
+    }
+  }
+
+  // On mount, check if we have stored credentials and auto-login
+  // This is handled via the fillAutoLogin callback from parent if needed
 
   return (
     <div style={{ width: '100%', maxWidth: '448px', position: 'relative', zIndex: 10 }}>
