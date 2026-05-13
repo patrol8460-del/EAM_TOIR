@@ -14,34 +14,29 @@ interface User {
 }
 
 export default function Home() {
-  // Immediately check localStorage for a stored session (synchronous, no network needed)
-  const [user, setUser] = useState<User | null>(() => {
+  // Start with null to match SSR output — load from localStorage in useEffect
+  const [user, setUser] = useState<User | null>(null)
+
+  const storeSetUser = useAuthStore((s) => s.setUser)
+
+  // Load session from localStorage on mount + verify with server
+  useEffect(() => {
+    let storedUser: User | null = null
     try {
       const stored = localStorage.getItem('session_user')
       if (stored) {
         const parsed = JSON.parse(stored)
-        if (parsed?.id && parsed?.isActive) return parsed
+        if (parsed?.id && parsed?.isActive) storedUser = parsed
       }
     } catch { /* ignore */ }
-    return null
-  })
 
-  const storeSetUser = useAuthStore((s) => s.setUser)
+    if (storedUser) {
+      setUser(storedUser)
+      storeSetUser(storedUser)
 
-  // Sync to zustand on mount
-  useState(() => {
-    if (user) storeSetUser(user)
-  })
-
-  // Verify session in background on mount only (not on user change, to avoid logout loops)
-  useEffect(() => {
-    const stored = localStorage.getItem('session_user')
-    if (!stored) return
-    try {
-      const parsed = JSON.parse(stored)
-      if (!parsed?.id) return
+      // Verify session in background
       fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${parsed.id}` },
+        headers: { Authorization: `Bearer ${storedUser.id}` },
       }).then(res => {
         if (res.ok) return
         // Session invalid — clear
@@ -52,7 +47,7 @@ export default function Home() {
         setUser(null)
         storeSetUser(null)
       }).catch(() => { /* network error, keep local session */ })
-    } catch { /* ignore */ }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

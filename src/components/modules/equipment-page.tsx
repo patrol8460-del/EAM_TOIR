@@ -666,8 +666,11 @@ export default function EquipmentPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Column visibility state (persisted in localStorage, ORDER MATTERS) ──
-  const [visibleOptionalCols, setVisibleOptionalCols] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return DEFAULT_VISIBLE_COLUMNS
+  // Start with defaults to match SSR, load from localStorage in useEffect
+  const [visibleOptionalCols, setVisibleOptionalCols] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS)
+
+  // Load column visibility from localStorage on mount
+  useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
@@ -679,14 +682,14 @@ export default function EquipmentPage() {
           if (!hasCode || !hasName) {
             const migrated = [...(hasName ? [] : ['name']), ...(hasCode ? [] : ['code']), ...parsed]
             localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
-            return migrated
+            setVisibleOptionalCols(migrated)
+            return
           }
-          return parsed
+          setVisibleOptionalCols(parsed)
         }
       }
     } catch { /* ignore */ }
-    return DEFAULT_VISIBLE_COLUMNS
-  })
+  }, [])
 
   // activeColumns preserves the user-defined order from visibleOptionalCols
   const activeColumns = visibleOptionalCols
