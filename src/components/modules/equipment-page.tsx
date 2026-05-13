@@ -1196,16 +1196,24 @@ export default function EquipmentPage() {
   }, [items, sortKey, sortDir, colFilters, cellText])
 
   // ── Excel Export (server-side via API — no xlsx on client) ──
+  // If checkboxes are selected → export only checked rows; otherwise → export all
   const handleExportExcel = useCallback(async () => {
     if (displayItems.length === 0) {
       toast.error('Нет данных для экспорта')
+      return
+    }
+    const exportItems = selectedIds.size > 0
+      ? displayItems.filter((item) => selectedIds.has(item.id))
+      : displayItems
+    if (exportItems.length === 0) {
+      toast.error('Нет выбранных записей для экспорта')
       return
     }
     setExporting(true)
     try {
       const cols = activeColumns
       const headers = cols.map((c) => c.label)
-      const rows = displayItems.map((item) =>
+      const rows = exportItems.map((item) =>
         cols.map((c) => cellText(item, c.key))
       )
       const res = await fetch('/api/equipment/export', {
@@ -1225,14 +1233,17 @@ export default function EquipmentPage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      toast.success(`Экспортировано ${displayItems.length} записей`)
+      const total = displayItems.length
+      toast.success(selectedIds.size > 0
+        ? `Экспортировано ${exportItems.length} из ${total} записей`
+        : `Экспортировано ${total} записей`)
     } catch (err) {
       console.error('Export error:', err)
       toast.error('Ошибка при экспорте')
     } finally {
       setExporting(false)
     }
-  }, [displayItems, activeColumns, cellText])
+  }, [displayItems, activeColumns, cellText, selectedIds])
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set())
