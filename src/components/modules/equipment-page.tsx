@@ -791,8 +791,8 @@ export default function EquipmentPage() {
     savePresetsToStorage(next)
   }, [])
 
-  // Build a snapshot of the current view state
-  const captureCurrentView = useCallback((): Omit<ViewPreset, 'id' | 'name' | 'createdAt' | 'updatedAt'> => {
+  // Build a snapshot of the current view state (plain fn to avoid TDZ with later-declared sortKey/sortDir/colFilters)
+  const captureCurrentView = (): Omit<ViewPreset, 'id' | 'name' | 'createdAt' | 'updatedAt'> => {
     return {
       columns: [...visibleOptionalCols],
       search,
@@ -802,9 +802,10 @@ export default function EquipmentPage() {
       colFilters: Object.fromEntries(Object.entries(colFilters).map(([k, v]) => [k, [...v]])),
       advancedConditions: [...lastAdvancedConditionsRef.current],
     }
-  }, [visibleOptionalCols, search, statusFilter, sortKey, sortDir, colFilters])
+  }
 
-  const applyPreset = useCallback((preset: ViewPreset) => {
+  // Plain fn to avoid TDZ with later-declared handleAdvancedSearch / setSortKey / setSortDir / setColFilters
+  const applyPreset = (preset: ViewPreset) => {
     // Columns
     saveColumns(preset.columns)
     // Search
@@ -827,7 +828,7 @@ export default function EquipmentPage() {
     setActivePresetId(preset.id)
     setPresetMenuOpen(false)
     toast.success(`Пресет «${preset.name}» применён`)
-  }, [saveColumns, handleAdvancedSearch])
+  }
 
   const saveNewPreset = useCallback(() => {
     const name = newPresetName.trim()
@@ -848,7 +849,7 @@ export default function EquipmentPage() {
     setSavePresetDialogOpen(false)
     setPresetMenuOpen(false)
     toast.success(`Пресет «${name}» сохранён`)
-  }, [newPresetName, presets, captureCurrentView, persistPresets])
+  }, [newPresetName, presets, persistPresets])
 
   const updateCurrentPreset = useCallback(() => {
     if (!activePresetId) return
@@ -859,7 +860,7 @@ export default function EquipmentPage() {
     persistPresets(next)
     setPresetMenuOpen(false)
     toast.success(`Пресет «${preset.name}» обновлён`)
-  }, [activePresetId, presets, captureCurrentView, persistPresets])
+  }, [activePresetId, presets, persistPresets])
 
   const deletePreset = useCallback((id: string) => {
     const preset = presets.find((p) => p.id === id)
