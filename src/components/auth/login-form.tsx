@@ -30,11 +30,16 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   const loginAttempted = useRef(false)
 
   const doLogin = useCallback(async (loginEmail: string, loginPassword: string) => {
-    if (loading) return
+    console.log('[LOGIN] doLogin called', { loginEmail, loading })
+    if (loading) {
+      console.log('[LOGIN] blocked: loading is true')
+      return
+    }
     setLoading(true)
     setError('')
 
     try {
+      console.log('[LOGIN] fetching...')
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -42,12 +47,15 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       })
 
+      console.log('[LOGIN] response status:', res.status)
+
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Ошибка авторизации')
       }
 
       const data = await res.json()
+      console.log('[LOGIN] success, user:', data.user?.email)
 
       // Store session in localStorage for iframe / cookie-blocked environments
       try {
@@ -55,16 +63,20 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         localStorage.setItem('session_user', JSON.stringify(data.user))
         localStorage.setItem('login_email', loginEmail)
         localStorage.setItem('login_password', loginPassword)
-      } catch { /* localStorage may be blocked */ }
+        console.log('[LOGIN] localStorage saved')
+      } catch (e) {
+        console.warn('[LOGIN] localStorage failed:', e)
+      }
 
       // Notify parent instead of reloading
+      console.log('[LOGIN] onLogin exists:', !!onLogin)
       if (onLogin) {
         onLogin(data.user)
       } else {
-        // Fallback: reload page
         window.location.replace('/')
       }
     } catch (err) {
+      console.error('[LOGIN] error:', err)
       setError(err instanceof Error ? err.message : 'Произошла ошибка при входе')
     } finally {
       setLoading(false)
