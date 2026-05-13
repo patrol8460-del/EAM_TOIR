@@ -1879,6 +1879,7 @@ export default function EquipmentPage() {
                 </Button>
               )}
             </div>
+            <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -1959,6 +1960,7 @@ export default function EquipmentPage() {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
 
           {/* Active sort & filter indicators */}
