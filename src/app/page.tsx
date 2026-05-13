@@ -6,7 +6,7 @@ import { LoginForm } from '@/components/auth/login-form'
 import { useAuthStore } from '@/store/auth-store'
 import { ErrorBoundary } from '@/components/error-boundary'
 
-// SSR-safe: AppShell is loaded client-side only
+// SSR-safe: AppShell loaded client-side only (contains localStorage-dependent modules)
 const AppShell = dynamic(
   () => import('@/components/layout/app-shell').then((m) => m.AppShell),
   { ssr: false, loading: () => <AppLoader /> }
@@ -38,13 +38,11 @@ interface User {
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
-  const [mounted, setMounted] = useState(false)
 
   const storeSetUser = useAuthStore((s) => s.setUser)
 
   // Load session from localStorage on mount
   useEffect(() => {
-    setMounted(true)
     let storedUser: User | null = null
     try {
       const stored = localStorage.getItem('session_user')
@@ -77,19 +75,6 @@ export default function Home() {
     } catch { /* ignore */ }
     fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
   }, [storeSetUser])
-
-  // Before mount — render nothing (matches SSR)
-  if (!mounted) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #0F1B2D 0%, #162236 50%, #1a2a42 100%)',
-      }} />
-    )
-  }
 
   if (!user) {
     return (
