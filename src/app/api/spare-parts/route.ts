@@ -65,13 +65,13 @@ export async function POST(request: NextRequest) {
     const { name, code, categoryId, unit, minStock, currentStock, price, description } = body
 
     if (!name || !code) {
-      return NextResponse.json({ error: 'Наименование и артикул обязательны' }, { status: 400 })
+      return NextResponse.json({ error: 'Наименование и ОЗМ обязательны' }, { status: 400 })
     }
 
     // Check unique code
     const existing = await db.sparePart.findUnique({ where: { code } })
     if (existing) {
-      return NextResponse.json({ error: 'Запчасть с таким артикулом уже существует' }, { status: 409 })
+      return NextResponse.json({ error: 'Запчасть с таким ОЗМ уже существует' }, { status: 409 })
     }
 
     const sparePart = await db.sparePart.create({
@@ -122,7 +122,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'ID запчасти обязателен' }, { status: 400 })
     }
     if (!name || !code) {
-      return NextResponse.json({ error: 'Наименование и артикул обязательны' }, { status: 400 })
+      return NextResponse.json({ error: 'Наименование и ОЗМ обязательны' }, { status: 400 })
     }
 
     // Check spare part exists
@@ -134,7 +134,7 @@ export async function PUT(request: NextRequest) {
     // Check unique code (exclude self)
     const duplicateCode = await db.sparePart.findUnique({ where: { code } })
     if (duplicateCode && duplicateCode.id !== id) {
-      return NextResponse.json({ error: 'Запчасть с таким артикулом уже существует' }, { status: 409 })
+      return NextResponse.json({ error: 'Запчасть с таким ОЗМ уже существует' }, { status: 409 })
     }
 
     const sparePart = await db.sparePart.update({

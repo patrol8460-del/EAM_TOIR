@@ -563,12 +563,12 @@ async function seed() {
   // ============ APPROVAL ROUTES ============
   const existingRoutes = await db.approvalRoute.count()
   if (existingRoutes === 0) {
-    // Route 1: Заказ запчастей по артикулу БЕЗ привязки к оборудованию
+    // Route 1: Заказ запчастей по ОЗМ БЕЗ привязки к оборудованию
     const route1 = await db.approvalRoute.create({
       data: {
         name: 'Заказ ЗИП без привязки к оборудованию',
         type: 'purchase_no_equip',
-        description: 'Заказ запчастей по артикулу из ОЗМ-справочника без привязки к оборудованию',
+        description: 'Заказ запчастей по ОЗМ из ОЗМ-справочника без привязки к оборудованию',
         steps: {
           create: [
             { stepOrder: 1, role: 'engineer', position: 'Инженер ТО', description: 'Проверка технической необходимости и корректности заявки' },
@@ -580,12 +580,12 @@ async function seed() {
     })
     console.log('✅ Approval route 1 created (purchase_no_equip)')
 
-    // Route 2: Заказ запчастей по артикулу С привязкой к оборудованию
+    // Route 2: Заказ запчастей по ОЗМ С привязкой к оборудованию
     const route2 = await db.approvalRoute.create({
       data: {
         name: 'Заказ ЗИП с привязкой к оборудованию',
         type: 'purchase_with_equip',
-        description: 'Заказ запчастей по артикулу из ОЗМ-справочника с привязкой к конкретному оборудованию',
+        description: 'Заказ запчастей по ОЗМ из ОЗМ-справочника с привязкой к конкретному оборудованию',
         steps: {
           create: [
             { stepOrder: 1, role: 'engineer', position: 'Инженер-механик', description: 'Проверка применимости запчасти к оборудованию' },

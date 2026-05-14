@@ -377,7 +377,7 @@ function CatalogTab() {
 
   const handleSubmit = async () => {
     if (!form.name || !form.code) {
-      toast.error('Укажите наименование и артикул')
+      toast.error('Укажите наименование и ОЗМ')
       return
     }
     setSubmitting(true)
@@ -432,7 +432,7 @@ function CatalogTab() {
 
   const handleEditSubmit = async () => {
     if (!editForm.name || !editForm.code || !editItemId) {
-      toast.error('Укажите наименование и артикул')
+      toast.error('Укажите наименование и ОЗМ')
       return
     }
     setEditSubmitting(true)
@@ -586,7 +586,7 @@ function CatalogTab() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="sp-code">Артикул *</Label>
+                    <Label htmlFor="sp-code">ОЗМ *</Label>
                     <Input
                       id="sp-code"
                       value={form.code}
@@ -691,7 +691,7 @@ function CatalogTab() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Поиск по артикулу, наименованию..."
+            placeholder="Поиск по ОЗМу, наименованию..."
             className="w-full pl-9 sm:w-[280px]"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -705,7 +705,7 @@ function CatalogTab() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-6">Артикул</TableHead>
+                <TableHead className="pl-6">ОЗМ</TableHead>
                 <TableHead>Наименование</TableHead>
                 <TableHead>Категория</TableHead>
                 <TableHead className="text-right">Остаток</TableHead>
@@ -823,7 +823,7 @@ function CatalogTab() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-sp-code">Артикул *</Label>
+                <Label htmlFor="edit-sp-code">ОЗМ *</Label>
                 <Input
                   id="edit-sp-code"
                   value={editForm.code}
@@ -1334,7 +1334,7 @@ function ZipRequestDetailDialog({
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent text-xs">
-                          <TableHead>Артикул</TableHead>
+                          <TableHead>ОЗМ</TableHead>
                           <TableHead>Наименование</TableHead>
                           <TableHead className="text-right">Кол-во</TableHead>
                           <TableHead>Ед.изм.</TableHead>
@@ -1781,7 +1781,7 @@ function CreateZipRequestDialog({
                       <ShoppingCart className="size-5 text-orange-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">Закупка по артикулу</p>
+                      <p className="font-medium text-sm">Закупка по ОЗМу</p>
                       <p className="text-xs text-muted-foreground">
                         Без привязки к оборудованию
                       </p>
@@ -1802,7 +1802,7 @@ function CreateZipRequestDialog({
                       <BoxesIcon className="size-5 text-emerald-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">Закупка по артикулу</p>
+                      <p className="font-medium text-sm">Закупка по ОЗМу</p>
                       <p className="text-xs text-muted-foreground">
                         С привязкой к оборудованию
                       </p>
@@ -1949,7 +1949,7 @@ function CreateZipRequestDialog({
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent text-xs">
-                      <TableHead className="min-w-[100px]">Артикул</TableHead>
+                      <TableHead className="min-w-[100px]">ОЗМ</TableHead>
                       <TableHead className="min-w-[150px]">Наименование *</TableHead>
                       <TableHead className="w-[70px] text-right">Кол-во</TableHead>
                       <TableHead className="w-[70px]">Ед.изм.</TableHead>

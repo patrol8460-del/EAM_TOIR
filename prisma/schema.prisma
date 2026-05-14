@@ -257,7 +257,7 @@ model EquipmentType {
 model SparePart {
   id          String   @id @default(cuid())
   name        String
-  code        String   @unique   // артикул
+  code        String   @unique   // ОЗМ
   categoryId  String?
   unit        String   @default("шт") // единица измерения
   minStock    Int      @default(0)   // минимальный остаток
