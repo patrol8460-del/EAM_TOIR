@@ -29,6 +29,8 @@ model User {
   foremanBrigades   Brigade[]  @relation("BrigadeForeman")
   assignedShiftTasks ShiftTask[] @relation("ShiftTaskAssigner")
   issuedPermits     WorkPermit[] @relation("PermitIssuer")
+  createdZipRequests ZipRequest[] @relation("ZipRequestAuthor")
+  approvalDecisions ApprovalAction[] @relation("ApprovalActionDecider")
 
   @@index([departmentId])
   @@index([brigadeId])
@@ -191,6 +193,7 @@ model Equipment {
   sparePartMovements SparePartMovement[]
   unplannedRequests UnplannedRequest[]
   measuredParameters MeasuredParameter[]
+  zipRequests         ZipRequest[]
 
   @@index([parentId])
   @@index([departmentId])
@@ -267,6 +270,7 @@ model SparePart {
 
   category    SparePartCategory?    @relation(fields: [categoryId], references: [id])
   movements   SparePartMovement[]
+  zipRequestItems ZipRequestItem[]
 
   @@index([categoryId])
 }
@@ -374,4 +378,127 @@ model UnplannedRequest {
   @@index([assignedTo])
   @@index([status])
   @@index([priority])
+}
+
+// ============ ПОТРЕБНОСТИ В ЗИП (ЗАПАСНЫЕ ЧАСТИ) ============
+
+model ZipRequest {
+  id               String   @id @default(cuid())
+  number           String   @unique
+  type             String   // purchase_no_equip, purchase_with_equip, manufacturing
+  status           String   @default("draft") // draft, pending_approval, approved, rejected, ordered, completed, cancelled
+  priority         String   @default("medium") // low, medium, high, critical
+  title            String
+  description      String?
+  neededBy         String?  // YYYY-MM-DD
+  equipmentId      String?
+  requestedBy      String   // userId (author)
+  approvalRouteId  String?
+  currentStepOrder Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  equipment      Equipment?     @relation(fields: [equipmentId], references: [id])
+  author         User           @relation("ZipRequestAuthor", fields: [requestedBy], references: [id])
+  items          ZipRequestItem[]
+  files          ZipRequestFile[]
+  approvalActions ApprovalAction[]
+  approvalRoute  ApprovalRoute? @relation(fields: [approvalRouteId], references: [id])
+
+  @@index([equipmentId])
+  @@index([requestedBy])
+  @@index([status])
+  @@index([type])
+}
+
+model ZipRequestItem {
+  id             String   @id @default(cuid())
+  zipRequestId   String
+  sparePartId    String?
+  articleNumber  String
+  name           String
+  description    String?
+  quantity       Int
+  unit           String   @default("шт")
+  unitPrice      Float?
+  totalPrice     Float?
+  drawingNumber  String?
+  material       String?
+  specifications String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  zipRequest ZipRequest @relation(fields: [zipRequestId], references: [id], onDelete: Cascade)
+  sparePart  SparePart? @relation(fields: [sparePartId], references: [id])
+
+  @@index([zipRequestId])
+  @@index([sparePartId])
+}
+
+model ZipRequestFile {
+  id           String   @id @default(cuid())
+  zipRequestId String
+  fileName     String
+  fileSize     Int
+  mimeType     String
+  filePath     String
+  uploadedBy   String   // userId
+  createdAt    DateTime @default(now())
+
+  zipRequest ZipRequest @relation(fields: [zipRequestId], references: [id], onDelete: Cascade)
+
+  @@index([zipRequestId])
+}
+
+// ============ МАРШРУТЫ СОГЛАСОВАНИЯ ============
+
+model ApprovalRoute {
+  id          String          @id @default(cuid())
+  name        String
+  type        String          // purchase_no_equip, purchase_with_equip, manufacturing
+  description String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  steps       ApprovalStep[]
+  zipRequests ZipRequest[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model ApprovalStep {
+  id              String         @id @default(cuid())
+  approvalRouteId String
+  stepOrder       Int
+  role            String         // admin, manager, engineer, worker — кто согласует
+  position        String?        // должность/описание
+  description     String?
+  isOptional      Boolean        @default(false)
+
+  approvalRoute ApprovalRoute @relation(fields: [approvalRouteId], references: [id], onDelete: Cascade)
+  actions       ApprovalAction[]
+
+  @@index([approvalRouteId])
+  @@unique([approvalRouteId, stepOrder])
+}
+
+model ApprovalAction {
+  id              String        @id @default(cuid())
+  zipRequestId    String
+  approvalStepId  String
+  decidedBy       String?       // userId
+  decidedByUser   User?         @relation("ApprovalActionDecider", fields: [decidedBy], references: [id])
+  status          String        @default("pending") // pending, approved, rejected, skipped
+  comment         String?
+  decidedAt       DateTime?
+  createdAt       DateTime       @default(now())
+
+  zipRequest   ZipRequest   @relation(fields: [zipRequestId], references: [id], onDelete: Cascade)
+  approvalStep ApprovalStep @relation(fields: [approvalStepId], references: [id])
+
+  @@index([zipRequestId])
+  @@index([approvalStepId])
+  @@index([status])
 }

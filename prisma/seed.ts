@@ -560,6 +560,63 @@ async function seed() {
     }
   console.log('✅ Audit logs created')
 
+  // ============ APPROVAL ROUTES ============
+  const existingRoutes = await db.approvalRoute.count()
+  if (existingRoutes === 0) {
+    // Route 1: Заказ запчастей по артикулу БЕЗ привязки к оборудованию
+    const route1 = await db.approvalRoute.create({
+      data: {
+        name: 'Заказ ЗИП без привязки к оборудованию',
+        type: 'purchase_no_equip',
+        description: 'Заказ запчастей по артикулу из ОЗМ-справочника без привязки к оборудованию',
+        steps: {
+          create: [
+            { stepOrder: 1, role: 'engineer', position: 'Инженер ТО', description: 'Проверка технической необходимости и корректности заявки' },
+            { stepOrder: 2, role: 'manager', position: 'Руководитель службы', description: 'Согласование закупки и бюджета' },
+            { stepOrder: 3, role: 'admin', position: 'Администратор', description: 'Финальное утверждение заявки' },
+          ],
+        },
+      },
+    })
+    console.log('✅ Approval route 1 created (purchase_no_equip)')
+
+    // Route 2: Заказ запчастей по артикулу С привязкой к оборудованию
+    const route2 = await db.approvalRoute.create({
+      data: {
+        name: 'Заказ ЗИП с привязкой к оборудованию',
+        type: 'purchase_with_equip',
+        description: 'Заказ запчастей по артикулу из ОЗМ-справочника с привязкой к конкретному оборудованию',
+        steps: {
+          create: [
+            { stepOrder: 1, role: 'engineer', position: 'Инженер-механик', description: 'Проверка применимости запчасти к оборудованию' },
+            { stepOrder: 2, role: 'engineer', position: 'Начальник смены', description: 'Подтверждение потребности в запчасти', isOptional: true },
+            { stepOrder: 3, role: 'manager', position: 'Руководитель службы', description: 'Согласование закупки и выделение бюджета' },
+            { stepOrder: 4, role: 'admin', position: 'Администратор', description: 'Финальное утверждение и направление в снабжение' },
+          ],
+        },
+      },
+    })
+    console.log('✅ Approval route 2 created (purchase_with_equip)')
+
+    // Route 3: Заказ изготовления запчастей с привязкой к оборудованию
+    const route3 = await db.approvalRoute.create({
+      data: {
+        name: 'Изготовление ЗИП с привязкой к оборудованию',
+        type: 'manufacturing',
+        description: 'Заказ изготовления нестандартных запчастей с привязкой к оборудованию',
+        steps: {
+          create: [
+            { stepOrder: 1, role: 'engineer', position: 'Инженер-конструктор', description: 'Проверка чертежей и спецификаций' },
+            { stepOrder: 2, role: 'engineer', position: 'Технолог', description: 'Оценка технологической возможности изготовления', isOptional: true },
+            { stepOrder: 3, role: 'manager', position: 'Руководитель службы', description: 'Согласование стоимости и сроков изготовления' },
+            { stepOrder: 4, role: 'admin', position: 'Администратор', description: 'Финальное утверждение заказа на изготовление' },
+          ],
+        },
+      },
+    })
+    console.log('✅ Approval route 3 created (manufacturing)')
+  }
+
   console.log('🌱 Seeding complete!')
 }
 
