@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
+import { getSessionUser } from '@/lib/auth'
 
-async function getSessionUser(request: NextRequest) {
-  const sessionToken = request.cookies.get('session_token')?.value
-  if (!sessionToken) return null
-  return db.user.findUnique({
-    where: { id: sessionToken },
-    select: { id: true, role: true, isActive: true },
-  })
-}
 
 export async function GET(request: NextRequest) {
   try {

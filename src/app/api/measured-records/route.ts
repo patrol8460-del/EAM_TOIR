@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser } from '@/lib/auth'
 
-async function getSessionUser(request: NextRequest) {
-  const sessionToken = request.cookies.get('session_token')?.value
-  if (!sessionToken) return null
-  return db.user.findUnique({
-    where: { id: sessionToken },
-    select: { id: true, role: true, isActive: true },
-  })
-}
 
 // POST /api/measured-records — добавить запись замера
 export async function POST(request: NextRequest) {

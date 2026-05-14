@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser } from '@/lib/auth'
 import * as XLSX from 'xlsx'
 import { writeFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 
-async function getSessionUser(request: NextRequest) {
-  const sessionToken = request.cookies.get('session_token')?.value
-  if (!sessionToken) return null
-  return db.user.findUnique({
-    where: { id: sessionToken },
-    select: { id: true, role: true, isActive: true },
-  })
-}
 
 // Column name mapping: various Russian/English names → database field keys
 const COLUMN_MAP: Record<string, string> = {

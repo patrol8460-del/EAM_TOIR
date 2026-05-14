@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSessionUser } from '@/lib/auth'
 
-// ========== Auth (same pattern as /api/equipment) ==========
-
-async function getSessionUser(request: NextRequest) {
-  const sessionToken = request.cookies.get('session_token')?.value
-  if (!sessionToken) return null
-  return db.user.findUnique({
-    where: { id: sessionToken },
-    select: { id: true, role: true, isActive: true },
-  })
-}
 
 // ========== Types ==========
 

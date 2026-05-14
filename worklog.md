@@ -1060,3 +1060,56 @@ Stage Summary:
 - Fixed critical TDZ crash that prevented equipment page and presets button from rendering
 - Equipment list (50 items) and presets dropdown should now display correctly
 - Commit: f8242db "fix: resolve TDZ crash in equipment page preset functions"
+
+---
+
+## Task ID: 7 — Replace local getSessionUser with shared import from @/lib/auth
+
+**Status**: ✅ Completed
+
+### Date: 2025-07-11
+
+### Summary
+Extracted the duplicated `getSessionUser` function from 16 API route files into the shared `@/lib/auth` module. Also added missing `hashPassword` and `verifyPassword` exports to `@/lib/auth.ts` to fix a pre-existing build error.
+
+### Files Modified (16 API routes)
+
+| # | File | Changes |
+|---|------|---------|
+| 1 | `src/app/api/analytics/route.ts` | Removed local `getSessionUser`, added import |
+| 2 | `src/app/api/dashboard/route.ts` | Removed local `getSessionUser`, added import |
+| 3 | `src/app/api/equipment/route.ts` | Removed local `getSessionUser`, added import |
+| 4 | `src/app/api/equipment/[id]/measured-params/route.ts` | Removed local `getSessionUser`, added import |
+| 5 | `src/app/api/equipment/[id]/parameters/records/route.ts` | Removed local `getSessionUser`, added import |
+| 6 | `src/app/api/equipment/[id]/parameters/route.ts` | Removed local `getSessionUser`, added import |
+| 7 | `src/app/api/equipment/[id]/route.ts` | Removed local `getSessionUser`, added import |
+| 8 | `src/app/api/equipment/bulk/route.ts` | Removed local `getSessionUser`, added import |
+| 9 | `src/app/api/equipment/import/route.ts` | Removed local `getSessionUser`, added import |
+| 10 | `src/app/api/equipment/search/route.ts` | Removed local `getSessionUser` + auth comment block, added import |
+| 11 | `src/app/api/measured-records/route.ts` | Removed local `getSessionUser`, added import |
+| 12 | `src/app/api/personnel/route.ts` | Removed local `getSessionUser`, added import |
+| 13 | `src/app/api/planning/route.ts` | Removed local `getSessionUser`, added import |
+| 14 | `src/app/api/requests/[id]/route.ts` | Removed local `getSessionUser`, added import |
+| 15 | `src/app/api/requests/route.ts` | Removed local `getSessionUser`, added import |
+| 16 | `src/app/api/spare-parts/route.ts` | Removed local `getSessionUser`, added import |
+
+### File Skipped
+- `src/app/api/equipment/import/template/route.ts` — does not use `getSessionUser` (uses inline cookie check)
+
+### Files NOT Modified (as instructed)
+- `auth/login/route.ts`, `auth/logout/route.ts`, `auth/me/route.ts`, `auth/register/route.ts`
+- `column-presets/route.ts`, `export/route.ts`
+
+### Additional Fix: `src/lib/auth.ts`
+Added `hashPassword` and `verifyPassword` exports that were already being imported by `auth/login/route.ts` and `auth/register/route.ts` but were missing from the module:
+- `hashPassword(password)` — scrypt with random 16-byte salt, returns `salt:hash` hex format
+- `verifyPassword(password, storedHash)` — scrypt + timingSafeEqual verification
+
+### `import { db } from '@/lib/db'` — kept in all files
+All 16 files still use `db` for Prisma queries beyond auth, so the `db` import was retained.
+
+### Verification
+- Grep confirms: 0 local `async function getSessionUser` definitions remain in API routes
+- Grep confirms: 16 files now have `import { getSessionUser } from '@/lib/auth'`
+- `npx next build` — ✅ succeeded
+- Static files copied to `.next/standalone/`
