@@ -67,9 +67,10 @@ model Department {
 
   parent      Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
   children    Department[] @relation("DeptHierarchy")
-  users       User[]
-  brigades    Brigade[]
-  equipment   Equipment[]
+  users             User[]
+  brigades          Brigade[]
+  equipment         Equipment[]
+  zipRequests       ZipRequest[]  @relation("ZipRequestApplicantDept")
 
   @@index([parentId])
 }
@@ -383,32 +384,36 @@ model UnplannedRequest {
 // ============ ПОТРЕБНОСТИ В ЗИП (ЗАПАСНЫЕ ЧАСТИ) ============
 
 model ZipRequest {
-  id               String   @id @default(cuid())
-  number           String   @unique
-  type             String   // purchase_no_equip, purchase_with_equip, manufacturing
-  status           String   @default("draft") // draft, pending_approval, approved, rejected, ordered, completed, cancelled
-  priority         String   @default("medium") // low, medium, high, critical
-  title            String
-  description      String?
-  neededBy         String?  // YYYY-MM-DD
-  equipmentId      String?
-  requestedBy      String   // userId (author)
-  approvalRouteId  String?
-  currentStepOrder Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  number                  String   @unique
+  type                    String   // purchase, manufacturing
+  status                  String   @default("draft") // draft, pending_approval, approved, rejected, ordered, completed, cancelled
+  priority                String   @default("additional") // additional, annual, urgent
+  title                   String
+  description             String?
+  neededBy                String?  // YYYY-MM-DD
+  equipmentId             String?
+  requestedBy             String   // userId (author)
+  applicantName           String?  // ФИО заявителя (от лица кого создаётся заявка)
+  applicantDepartmentId   String?  // подразделение заявителя
+  approvalRouteId         String?
+  currentStepOrder        Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
-  equipment      Equipment?     @relation(fields: [equipmentId], references: [id])
-  author         User           @relation("ZipRequestAuthor", fields: [requestedBy], references: [id])
-  items          ZipRequestItem[]
-  files          ZipRequestFile[]
-  approvalActions ApprovalAction[]
-  approvalRoute  ApprovalRoute? @relation(fields: [approvalRouteId], references: [id])
+  equipment              Equipment?     @relation(fields: [equipmentId], references: [id])
+  author                 User           @relation("ZipRequestAuthor", fields: [requestedBy], references: [id])
+  applicantDepartment    Department?    @relation("ZipRequestApplicantDept", fields: [applicantDepartmentId], references: [id])
+  items                  ZipRequestItem[]
+  files                  ZipRequestFile[]
+  approvalActions        ApprovalAction[]
+  approvalRoute          ApprovalRoute? @relation(fields: [approvalRouteId], references: [id])
 
   @@index([equipmentId])
   @@index([requestedBy])
   @@index([status])
   @@index([type])
+  @@index([applicantDepartmentId])
 }
 
 model ZipRequestItem {
@@ -455,7 +460,7 @@ model ZipRequestFile {
 model ApprovalRoute {
   id          String          @id @default(cuid())
   name        String
-  type        String          // purchase_no_equip, purchase_with_equip, manufacturing
+  type        String          // purchase, manufacturing
   description String?
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now())

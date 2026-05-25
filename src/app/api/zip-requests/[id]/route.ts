@@ -6,6 +6,34 @@ import { join } from 'path'
 
 export const dynamic = 'force-dynamic'
 
+// Helper: map raw Prisma ZipRequest to frontend-friendly format
+function mapZipRequest(item: any) {
+  return {
+    ...item,
+    requestNumber: item.number,
+    equipmentName: item.equipment?.name || null,
+    equipmentCode: item.equipment?.code || null,
+    authorId: item.author?.id || '',
+    authorName: item.author?.name || '',
+    authorRole: item.author?.role || '',
+    applicantDepartmentName: item.applicantDepartment?.name || null,
+    approvalActions: (item.approvalActions || []).map((a: any) => ({
+      id: a.id,
+      stepId: a.approvalStepId,
+      stepOrder: a.approvalStep?.stepOrder || 0,
+      role: a.approvalStep?.role || '',
+      position: a.approvalStep?.position || '',
+      description: a.approvalStep?.description || '',
+      isOptional: a.approvalStep?.isOptional || false,
+      action: a.status,
+      userId: a.decidedByUser?.id || null,
+      userName: a.decidedByUser?.name || null,
+      comment: a.comment || null,
+      actedAt: a.decidedAt ? new Date(a.decidedAt).toISOString() : null,
+    })),
+  }
+}
+
 // ─── GET: Retrieve full detail of a single ZIP request ───
 export async function GET(
   request: NextRequest,
@@ -24,6 +52,9 @@ export async function GET(
       include: {
         author: {
           select: { id: true, name: true, email: true, role: true },
+        },
+        applicantDepartment: {
+          select: { id: true, name: true, code: true },
         },
         equipment: {
           select: {
@@ -89,7 +120,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(zipRequest)
+    return NextResponse.json(mapZipRequest(zipRequest))
   } catch (error) {
     console.error('ZIP request detail error:', error)
     return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 })
@@ -134,7 +165,7 @@ export async function PUT(
 
     // Only draft requests can be edited (unless cancelling)
     const body = await request.json()
-    const { title, description, neededBy, priority, status, items } = body
+    const { title, description, neededBy, priority, status, items, applicantName, applicantDepartmentId, submitForApproval } = body
 
     // Allow status change only from draft to cancelled
     if (status) {
@@ -159,7 +190,23 @@ export async function PUT(
     if (description !== undefined) updateData.description = description
     if (neededBy !== undefined) updateData.neededBy = neededBy
     if (priority !== undefined) updateData.priority = priority
+    if (applicantName !== undefined) updateData.applicantName = applicantName
+    if (applicantDepartmentId !== undefined) updateData.applicantDepartmentId = applicantDepartmentId
     if (status === 'cancelled') updateData.status = 'cancelled'
+
+    // Handle submitForApproval for drafts
+    if (submitForApproval && existing.status === 'draft') {
+      const approvalRoute = await db.approvalRoute.findFirst({
+        where: { type: existing.type, isActive: true },
+        include: { steps: { orderBy: { stepOrder: 'asc' } } },
+      })
+      if (approvalRoute && approvalRoute.steps.length > 0) {
+        updateData.status = 'pending_approval'
+        updateData.approvalRouteId = approvalRoute.id
+        updateData.currentStepOrder = approvalRoute.steps[0].stepOrder
+        // Create approval actions inside the transaction below
+      }
+    }
 
     // Update request and optionally replace items in a transaction
     const updatedRequest = await db.$transaction(async (tx) => {
@@ -169,7 +216,26 @@ export async function PUT(
         data: updateData,
       })
 
-      // Replace items if provided
+      // If submitForApproval, create approval action records
+      if (submitForApproval && existing.status === 'draft' && updateData.approvalRouteId) {
+        const approvalRoute = await tx.approvalRoute.findFirst({
+          where: { type: existing.type, isActive: true },
+          include: { steps: { orderBy: { stepOrder: 'asc' } } },
+        })
+        if (approvalRoute) {
+          for (const step of approvalRoute.steps) {
+            await tx.approvalAction.create({
+              data: {
+                zipRequestId: id,
+                approvalStepId: step.id,
+                status: 'pending',
+              },
+            })
+          }
+        }
+      }
+
+      // Replace items if provided (only for draft status)
       if (items && Array.isArray(items)) {
         // Delete all existing items
         await tx.zipRequestItem.deleteMany({
@@ -220,6 +286,9 @@ export async function PUT(
         author: {
           select: { id: true, name: true, email: true, role: true },
         },
+        applicantDepartment: {
+          select: { id: true, name: true, code: true },
+        },
         equipment: {
           select: { id: true, name: true, code: true },
         },
@@ -268,7 +337,7 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json(fullRequest)
+    return NextResponse.json(mapZipRequest(fullRequest))
   } catch (error) {
     console.error('ZIP request update error:', error)
     if (error instanceof Error && error.message.includes('Каждая позиция')) {

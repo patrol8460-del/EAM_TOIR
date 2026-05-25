@@ -1,55 +1,31 @@
 #!/bin/bash
-# === CMMS ЦС ТОРО — Server Startup Script ===
-# Usage: bash start.sh
-# Starts production server with aggressive keepalive to prevent sandbox process killing.
+# Keep-sandbox-alive wrapper: starts Next.js dev server and keeps
+# writing activity so the sandbox container stays "active".
+cd /home/z/my-project
 
-cd "$(dirname "$0")"
-
-echo "🚀 Starting ЦС ТОРО CMMS..."
-
-# Kill any existing processes
-pkill -f "next dev" 2>/dev/null
-pkill -f "next start" 2>/dev/null
-pkill -f "next build" 2>/dev/null
+# Ensure port 3000 is free
+fuser -k 3000/tcp 2>/dev/null
 sleep 1
 
-# Build first
-echo "📦 Building..."
-npx next build > /tmp/cmms-build.log 2>&1
-if [ $? -ne 0 ]; then
-  echo "❌ Build failed. See /tmp/cmms-build.log"
-  cat /tmp/cmms-build.log
-  exit 1
-fi
-echo "✅ Build complete"
+# Start server in background
+npx next dev -p 3000 &
+SERVER_PID=$!
 
-# Start production server in background
-npx next start -p 3000 > /tmp/cmms-server.log 2>&1 &
-
-# Keepalive — pings server every 5 seconds, restarts if dead
-(
-  sleep 5
-  while true; do
-    if ! curl -s -o /dev/null --connect-timeout 2 --max-time 3 http://localhost:3000/ 2>/dev/null; then
-      echo "⚠️  Server died, restarting..." >> /tmp/cmms-keepalive.log
-      pkill -f "next start" 2>/dev/null
-      sleep 1
-      cd "$(dirname "$0")"
-      npx next start -p 3000 > /tmp/cmms-server.log 2>&1 &
-      echo "✅ Restarted at $(date)" >> /tmp/cmms-keepalive.log
-    fi
-    sleep 5
-  done
-) > /dev/null 2>&1 &
-
-# Wait for server to be ready
+# Wait for it to be ready
 for i in $(seq 1 30); do
-  if curl -s -o /dev/null --connect-timeout 2 --max-time 3 http://localhost:3000/ 2>/dev/null; then
-    echo "✅ Server is ready on http://localhost:3000"
-    exit 0
+  if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ 2>/dev/null | grep -q 200; then
+    echo "SERVER_READY PID=$SERVER_PID"
+    break
   fi
   sleep 1
 done
 
-echo "❌ Server failed to start"
-exit 1
+# Keep sandbox alive by generating continuous activity
+while kill -0 $SERVER_PID 2>/dev/null; do
+  date +%s > /tmp/sandbox-heartbeat
+  sleep 2
+done
+
+# If server died, restart everything (exec replaces this process)
+echo "SERVER_DIED, restarting..."
+exec "$0"

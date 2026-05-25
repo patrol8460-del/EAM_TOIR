@@ -4,6 +4,34 @@ import { getSessionUser } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
+// Helper: map raw Prisma ZipRequest to frontend-friendly format
+function mapZipRequest(item: any) {
+  return {
+    ...item,
+    requestNumber: item.number,
+    equipmentName: item.equipment?.name || null,
+    equipmentCode: item.equipment?.code || null,
+    authorId: item.author?.id || '',
+    authorName: item.author?.name || '',
+    authorRole: item.author?.role || '',
+    applicantDepartmentName: item.applicantDepartment?.name || null,
+    approvalActions: (item.approvalActions || []).map((a: any) => ({
+      id: a.id,
+      stepId: a.approvalStepId,
+      stepOrder: a.approvalStep?.stepOrder || 0,
+      role: a.approvalStep?.role || '',
+      position: a.approvalStep?.position || '',
+      description: a.approvalStep?.description || '',
+      isOptional: a.approvalStep?.isOptional || false,
+      action: a.status,
+      userId: a.decidedByUser?.id || null,
+      userName: a.decidedByUser?.name || null,
+      comment: a.comment || null,
+      actedAt: a.decidedAt ? new Date(a.decidedAt).toISOString() : null,
+    })),
+  }
+}
+
 // ─── POST: Approve, reject, or skip a ZIP request at current step ───
 export async function POST(
   request: NextRequest,
@@ -209,7 +237,7 @@ export async function POST(
       },
     })
 
-    return NextResponse.json(fullRequest)
+    return NextResponse.json(mapZipRequest(fullRequest))
   } catch (error) {
     console.error('ZIP request approval error:', error)
     return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 })

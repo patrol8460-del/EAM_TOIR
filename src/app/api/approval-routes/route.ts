@@ -69,8 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validTypes = [
-      'purchase_no_equip',
-      'purchase_with_equip',
+      'purchase',
       'manufacturing',
     ]
     if (!validTypes.includes(type)) {

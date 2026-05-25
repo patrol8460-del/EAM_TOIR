@@ -35,6 +35,7 @@ import {
   Send,
   ClipboardCheck,
   BoxesIcon,
+  ClipboardPaste,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -127,7 +128,7 @@ interface EquipmentItem {
   location: string
 }
 
-type ZipRequestType = 'purchase_no_equip' | 'purchase_with_equip' | 'manufacturing'
+type ZipRequestType = 'purchase' | 'manufacturing'
 type ZipRequestStatus =
   | 'draft'
   | 'pending_approval'
@@ -136,7 +137,7 @@ type ZipRequestStatus =
   | 'ordered'
   | 'completed'
   | 'cancelled'
-type PriorityType = 'low' | 'medium' | 'high' | 'critical'
+type PriorityType = 'additional' | 'annual' | 'urgent'
 
 interface ZipRequestItem {
   id?: string
@@ -210,6 +211,16 @@ interface ZipRequest {
   items: ZipRequestItem[]
   files: ZipRequestFile[]
   approvalActions: ApprovalAction[]
+  applicantName: string | null
+  applicantDepartmentId: string | null
+  applicantDepartmentName: string | null
+}
+
+interface DepartmentItem {
+  id: string
+  name: string
+  code: string
+  headName: string | null
 }
 
 interface ZipRequestsResponse {
@@ -266,22 +277,19 @@ const STATUS_COLORS: Record<ZipRequestStatus, string> = {
 }
 
 const PRIORITY_LABELS: Record<PriorityType, string> = {
-  low: 'Низкий',
-  medium: 'Средний',
-  high: 'Высокий',
-  critical: 'Критический',
+  additional: 'Дополнительная заявка',
+  annual: 'Годовая программа закупок',
+  urgent: 'Срочная (аварийная)',
 }
 
 const PRIORITY_COLORS: Record<PriorityType, string> = {
-  low: 'bg-slate-100 text-slate-600 border-slate-200',
-  medium: 'bg-gray-100 text-gray-700 border-gray-200',
-  high: 'bg-orange-100 text-orange-700 border-orange-200',
-  critical: 'bg-red-100 text-red-700 border-red-200',
+  additional: 'bg-sky-100 text-sky-700 border-sky-200',
+  annual: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  urgent: 'bg-red-100 text-red-700 border-red-200',
 }
 
 const TYPE_LABELS: Record<ZipRequestType, string> = {
-  purchase_no_equip: 'Закупка (без привязки)',
-  purchase_with_equip: 'Закупка (с привязкой)',
+  purchase: 'Закупка РМ и ЗИП',
   manufacturing: 'Изготовление',
 }
 
@@ -1308,6 +1316,18 @@ function ZipRequestDetailDialog({
                       <span className="font-medium">{request.equipmentName}</span>
                     </div>
                   )}
+                  {request.applicantName && (
+                    <div>
+                      <span className="text-muted-foreground">Заявитель:</span>{' '}
+                      <span className="font-medium">{request.applicantName}</span>
+                    </div>
+                  )}
+                  {request.applicantDepartmentName && (
+                    <div>
+                      <span className="text-muted-foreground">Подразделение заявителя:</span>{' '}
+                      <span className="font-medium">{request.applicantDepartmentName}</span>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
@@ -1517,17 +1537,19 @@ function CreateZipRequestDialog({
   open,
   onClose,
   onSuccess,
+  editRequest,
 }: {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  editRequest?: ZipRequest | null
 }) {
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
-  const [type, setType] = useState<ZipRequestType>('purchase_no_equip')
+  const [type, setType] = useState<ZipRequestType>('purchase')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [priority, setPriority] = useState<PriorityType>('medium')
+  const [priority, setPriority] = useState<PriorityType>('additional')
   const [neededBy, setNeededBy] = useState('')
   const [equipmentId, setEquipmentId] = useState('')
   const [equipmentName, setEquipmentName] = useState('')
@@ -1537,8 +1559,67 @@ function CreateZipRequestDialog({
   const [equipResults, setEquipResults] = useState<EquipmentItem[]>([])
   const [equipLoading, setEquipLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [applicantName, setApplicantName] = useState('')
+  const [applicantDepartmentId, setApplicantDepartmentId] = useState('')
+  const [applicantDepartmentName, setApplicantDepartmentName] = useState('')
+  const [departments, setDepartments] = useState<DepartmentItem[]>([])
+  const [deptLoading, setDeptLoading] = useState(false)
 
-  const showEquipment = type === 'purchase_with_equip' || type === 'manufacturing'
+  const isEditMode = !!editRequest
+
+  // Pre-fill form when editing
+  useEffect(() => {
+    if (!editRequest || !open) return
+    setStep(2) // Skip type selection when editing
+    setType(editRequest.type)
+    setTitle(editRequest.title)
+    setDescription(editRequest.description || '')
+    setPriority(editRequest.priority)
+    setNeededBy(editRequest.neededBy || '')
+    setEquipmentId(editRequest.equipmentId || '')
+    setEquipmentName(editRequest.equipmentName || '')
+    setApplicantName(editRequest.applicantName || '')
+    setApplicantDepartmentId(editRequest.applicantDepartmentId || '')
+    setApplicantDepartmentName(editRequest.applicantDepartmentName || '')
+    if (editRequest.items && editRequest.items.length > 0) {
+      setItems(editRequest.items.map(i => ({
+        articleNumber: i.articleNumber || '',
+        name: i.name || '',
+        quantity: i.quantity || 1,
+        unit: i.unit || 'шт',
+        unitPrice: i.unitPrice,
+        sparePartId: (i as any).sparePartId || undefined,
+        drawingNumber: i.drawingNumber || '',
+        material: i.material || '',
+        specifications: i.specifications || '',
+        notes: i.notes || '',
+      })))
+    }
+  }, [editRequest, open])
+
+  // Fetch departments on mount
+  useEffect(() => {
+    const fetchDepts = async () => {
+      try {
+        setDeptLoading(true)
+        const res = await fetch('/api/personnel')
+        if (res.ok) {
+          const data = await res.json()
+          setDepartments((data.departments || []).map((d: any) => ({
+            id: d.id, name: d.name, code: d.code, headName: d.headName,
+          })))
+        }
+      } catch { /* silent */ } finally { setDeptLoading(false) }
+    }
+    if (open) fetchDepts()
+  }, [open])
+
+  // Spare part catalog search
+  const [spSearchIdx, setSpSearchIdx] = useState<number | null>(null)
+  const [spSearchQuery, setSpSearchQuery] = useState('')
+  const [spSearchResults, setSpSearchResults] = useState<SparePartItem[]>([])
+  const [spSearchLoading, setSpSearchLoading] = useState(false)
+
   const isManufacturing = type === 'manufacturing'
 
   // Equipment search
@@ -1563,6 +1644,160 @@ function CreateZipRequestDialog({
     }, 300)
     return () => clearTimeout(timer)
   }, [equipSearch])
+
+  // Spare part catalog search
+  const handleSpSearch = useCallback((idx: number, query: string) => {
+    setSpSearchIdx(idx)
+    setSpSearchQuery(query)
+  }, [])
+
+  useEffect(() => {
+    if (spSearchIdx === null || spSearchQuery.length < 2) {
+      setSpSearchResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setSpSearchLoading(true)
+      try {
+        const res = await fetch(`/api/spare-parts?search=${encodeURIComponent(spSearchQuery)}`)
+        if (res.ok) {
+          const data = await res.json()
+          setSpSearchResults((data.items || []).slice(0, 10))
+        }
+      } catch {
+        // silent
+      } finally {
+        setSpSearchLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [spSearchQuery, spSearchIdx])
+
+  const selectSparePart = (idx: number, sp: SparePartItem) => {
+    setItems((prev) =>
+      prev.map((item, i) =>
+        i === idx
+          ? {
+              ...item,
+              articleNumber: sp.code,
+              name: sp.name,
+              unit: sp.unit,
+              unitPrice: sp.price || undefined,
+              sparePartId: sp.id,
+            }
+          : item,
+      ),
+    )
+    setSpSearchIdx(null)
+    setSpSearchResults([])
+    setSpSearchQuery('')
+  }
+
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      const lines = text.trim().split('\n').filter((l) => l.trim())
+      if (lines.length === 0) return
+
+      // Parse tabular data: TSV (tab-separated) or CSV
+      const newItems: ZipRequestItem[] = []
+      for (const line of lines) {
+        const cols = line.includes('\t')
+          ? line.split('\t').map((c) => c.trim())
+          : line.split(';').map((c) => c.trim())
+
+        // Try to match columns: ОЗМ, Наименование, Кол-во, Цена
+        let articleNumber = ''
+        let name = ''
+        let quantity = 1
+        let unitPrice: number | undefined = undefined
+
+        if (cols.length >= 4) {
+          // Assume order: ОЗМ, Наименование, Кол-во, Цена
+          articleNumber = cols[0]
+          name = cols[1]
+          quantity = parseInt(cols[2]) || 1
+          unitPrice = parseFloat(cols[3]) || undefined
+        } else if (cols.length === 3) {
+          // Assume: ОЗМ, Наименование, Кол-во
+          articleNumber = cols[0]
+          name = cols[1]
+          quantity = parseInt(cols[2]) || 1
+        } else if (cols.length <= 2) {
+          // Just ОЗМ or ОЗМ + name
+          articleNumber = cols[0]
+          name = cols[1] || ''
+        }
+
+        if (articleNumber) {
+          newItems.push({
+            articleNumber,
+            name,
+            quantity,
+            unit: 'шт',
+            unitPrice,
+          })
+        }
+      }
+
+      if (newItems.length > 0) {
+        // Collect unique ОЗМ codes for catalog lookup
+        const codesToLookup = [...new Set(
+          newItems
+            .map((item) => item.articleNumber.trim())
+            .filter((code) => code.length >= 1)
+        )]
+
+        // Look up catalog BEFORE setting items
+        let catalogMap: Record<string, { id: string; name: string; code: string; unit: string; price: number | null }> = {}
+        if (codesToLookup.length > 0) {
+          try {
+            const res = await fetch('/api/spare-parts/catalog-search', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ codes: codesToLookup }),
+            })
+            if (res.ok) {
+              const data = await res.json()
+              catalogMap = data.map || {}
+            }
+          } catch {
+            // catalog lookup failed — continue without auto-fill
+          }
+        }
+
+        // Merge catalog data into items
+        const filledItems = newItems.map((item) => {
+          const trimmedCode = item.articleNumber.trim()
+          const spMatch = catalogMap[trimmedCode] || catalogMap[trimmedCode.toLowerCase()]
+          if (spMatch) {
+            return {
+              ...item,
+              name: item.name || spMatch.name,
+              unitPrice: item.unitPrice || spMatch.price || undefined,
+              unit: spMatch.unit || item.unit,
+              sparePartId: spMatch.id,
+            }
+          }
+          return item
+        })
+
+        setItems(filledItems)
+
+        const matchedCount = filledItems.filter((item) => item.sparePartId).length
+        if (matchedCount > 0) {
+          toast.success(
+            `Вставлено ${newItems.length} позиц${newItems.length === 1 ? 'ия' : newItems.length < 5 ? 'ии' : 'ий'}, из каталога подтянуто ${matchedCount}`
+          )
+        } else {
+          toast.success(`Вставлено ${newItems.length} позиц${newItems.length === 1 ? 'ия' : newItems.length < 5 ? 'ии' : 'ий'}`)
+        }
+      }
+    } catch {
+      toast.error('Не удалось прочитать буфер обмена. Попробуйте Ctrl+V в поле ОЗМ.')
+    }
+  }
 
   const addItem = () => {
     setItems((prev) => [...prev, { ...emptyRequestItem }])
@@ -1596,16 +1831,19 @@ function CreateZipRequestDialog({
 
   const resetForm = () => {
     setStep(1)
-    setType('purchase_no_equip')
+    setType('purchase')
     setTitle('')
     setDescription('')
-    setPriority('medium')
+    setPriority('additional')
     setNeededBy('')
     setEquipmentId('')
     setEquipmentName('')
     setItems([{ ...emptyRequestItem }])
     setFiles([])
     setEquipSearch('')
+    setApplicantName('')
+    setApplicantDepartmentId('')
+    setApplicantDepartmentName('')
   }
 
   const handleClose = () => {
@@ -1618,10 +1856,6 @@ function CreateZipRequestDialog({
     if (step === 2) {
       if (!title.trim()) {
         toast.error('Укажите название заявки')
-        return false
-      }
-      if (showEquipment && !equipmentId) {
-        toast.error('Выберите оборудование')
         return false
       }
       return true
@@ -1643,10 +1877,10 @@ function CreateZipRequestDialog({
   }
 
   const prevStep = () => {
-    setStep((prev) => Math.max(prev - 1, 1))
+    setStep((prev) => Math.max(prev - 1, isEditMode ? 2 : 1))
   }
 
-  const handleSubmit = async () => {
+  const submitRequest = async (forApproval: boolean) => {
     const validItems = items
       .filter((i) => i.name.trim())
       .map((i) => ({
@@ -1668,49 +1902,60 @@ function CreateZipRequestDialog({
     setSubmitting(true)
     try {
       const payload: Record<string, unknown> = {
-        type,
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
         neededBy: neededBy || undefined,
         items: validItems,
-      }
-      if (showEquipment && equipmentId) {
-        payload.equipmentId = equipmentId
+        applicantName: applicantName.trim() || undefined,
+        applicantDepartmentId: applicantDepartmentId || undefined,
+        submitForApproval: forApproval,
       }
 
-      const res = await fetch('/api/zip-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      let res: Response
+      let createdOrUpdated: any
+
+      if (isEditMode && editRequest) {
+        // Update existing request
+        res = await fetch(`/api/zip-requests/${editRequest.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        // Create new request
+        payload.type = type
+        if (equipmentId) (payload as Record<string, unknown>).equipmentId = equipmentId
+        res = await fetch('/api/zip-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
 
       if (!res.ok) {
         const data = await res.json()
-        toast.error(data.error || 'Ошибка при создании заявки')
+        toast.error(data.error || (isEditMode ? 'Ошибка при обновлении заявки' : 'Ошибка при создании заявки'))
         setSubmitting(false)
         return
       }
 
-      const created = await res.json()
+      createdOrUpdated = await res.json()
 
-      // Upload files
-      if (files.length > 0 && created.id) {
+      // Upload files (only for new requests)
+      if (!isEditMode && files.length > 0 && createdOrUpdated.id) {
         for (const f of files) {
           const fd = new FormData()
           fd.append('file', f.file)
           try {
-            await fetch(`/api/zip-requests/${created.id}/files`, {
-              method: 'POST',
-              body: fd,
-            })
-          } catch {
-            // Continue uploading other files
-          }
+            await fetch(`/api/zip-requests/${createdOrUpdated.id}/files`, { method: 'POST', body: fd })
+          } catch { /* continue */ }
         }
       }
 
-      toast.success('Заявка успешно создана')
+      toast.success(forApproval
+        ? 'Заявка отправлена на согласование'
+        : (isEditMode ? 'Заявка обновлена' : 'Заявка сохранена как черновик'))
       handleClose()
       onSuccess()
     } catch {
@@ -1728,18 +1973,20 @@ function CreateZipRequestDialog({
   const stepLabels = ['Тип заявки', 'Основная информация', 'Позиции', 'Файлы']
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && handleClose()}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-[700px]">
-        <SheetHeader>
-          <SheetTitle className="text-lg">Создать потребность в ЗИП</SheetTitle>
-          <SheetDescription>
-            Шаг {step} из 4 — {stepLabels[step - 1]}
-          </SheetDescription>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[80vw] lg:max-w-[85vw]">
+        <DialogHeader>
+          <DialogTitle className="text-lg">{isEditMode ? `Редактировать заявку #${editRequest?.requestNumber}` : 'Создать потребность в ЗИП'}</DialogTitle>
+          <DialogDescription>
+            {isEditMode
+              ? `Шаг ${step - 1} из 3 — ${stepLabels[step - 1]}`
+              : `Шаг ${step} из 4 — ${stepLabels[step - 1]}`}
+          </DialogDescription>
+        </DialogHeader>
 
         {/* Step indicator */}
         <div className="mx-4 mt-2 flex items-center gap-1">
-          {[1, 2, 3, 4].map((s) => (
+          {(isEditMode ? [2, 3, 4] : [1, 2, 3, 4]).map((s, idx) => (
             <div key={s} className="flex items-center gap-1">
               <div
                 className={`flex size-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
@@ -1752,7 +1999,7 @@ function CreateZipRequestDialog({
               >
                 {s < step ? <CheckCircle2 className="size-4" /> : s}
               </div>
-              {s < 4 && (
+              {idx < (isEditMode ? 2 : 3) && (
                 <div
                   className={`h-0.5 w-6 ${
                     s < step ? 'bg-emerald-300' : 'bg-muted'
@@ -1770,41 +2017,20 @@ function CreateZipRequestDialog({
               <RadioGroup value={type} onValueChange={(v) => setType(v as ZipRequestType)}>
                 <label
                   className={`flex cursor-pointer items-start gap-4 rounded-lg border p-4 transition-colors ${
-                    type === 'purchase_no_equip'
+                    type === 'purchase'
                       ? 'border-orange-500 bg-orange-50'
                       : 'border-muted hover:border-orange-300'
                   }`}
                 >
-                  <RadioGroupItem value="purchase_no_equip" className="mt-0.5" />
+                  <RadioGroupItem value="purchase" className="mt-0.5" />
                   <div className="flex items-start gap-3">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-orange-100">
                       <ShoppingCart className="size-5 text-orange-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-sm">Закупка по ОЗМу</p>
+                      <p className="font-medium text-sm">Закупка расходных материалов и запасных частей</p>
                       <p className="text-xs text-muted-foreground">
-                        Без привязки к оборудованию
-                      </p>
-                    </div>
-                  </div>
-                </label>
-
-                <label
-                  className={`flex cursor-pointer items-start gap-4 rounded-lg border p-4 transition-colors ${
-                    type === 'purchase_with_equip'
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-muted hover:border-orange-300'
-                  }`}
-                >
-                  <RadioGroupItem value="purchase_with_equip" className="mt-0.5" />
-                  <div className="flex items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100">
-                      <BoxesIcon className="size-5 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">Закупка по ОЗМу</p>
-                      <p className="text-xs text-muted-foreground">
-                        С привязкой к оборудованию
+                        Выбор оборудования опционально
                       </p>
                     </div>
                   </div>
@@ -1864,10 +2090,9 @@ function CreateZipRequestDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Низкий</SelectItem>
-                      <SelectItem value="medium">Средний</SelectItem>
-                      <SelectItem value="high">Высокий</SelectItem>
-                      <SelectItem value="critical">Критический</SelectItem>
+                      <SelectItem value="additional">Дополнительная заявка</SelectItem>
+                      <SelectItem value="annual">Годовая программа закупок</SelectItem>
+                      <SelectItem value="urgent">Срочная (аварийная)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1882,10 +2107,9 @@ function CreateZipRequestDialog({
                 </div>
               </div>
 
-              {/* Equipment selector */}
-              {showEquipment && (
+              {/* Equipment selector (optional) */}
                 <div className="space-y-2">
-                  <Label>Оборудование *</Label>
+                  <Label>Оборудование <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
                   {equipmentName ? (
                     <div className="flex items-center gap-2 rounded-lg border px-3 py-2">
                       <span className="flex-1 text-sm">{equipmentName}</span>
@@ -1938,7 +2162,40 @@ function CreateZipRequestDialog({
                     </div>
                   )}
                 </div>
-              )}
+
+              {/* Applicant */}
+              <div className="space-y-2">
+                <Label>Заявитель <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
+                <Select
+                  value={applicantDepartmentId}
+                  onValueChange={(v) => {
+                    const dept = departments.find(d => d.id === v)
+                    setApplicantDepartmentId(v)
+                    setApplicantDepartmentName(dept?.name || '')
+                    if (!applicantName && dept?.headName) {
+                      setApplicantName(dept.headName)
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите подразделение" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="zip-applicant-name">ФИО заявителя</Label>
+                <Input
+                  id="zip-applicant-name"
+                  value={applicantName}
+                  onChange={(e) => setApplicantName(e.target.value)}
+                  placeholder="ФИО заявителя"
+                />
+              </div>
             </div>
           )}
 
@@ -1949,11 +2206,11 @@ function CreateZipRequestDialog({
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent text-xs">
-                      <TableHead className="min-w-[100px]">ОЗМ</TableHead>
-                      <TableHead className="min-w-[150px]">Наименование *</TableHead>
-                      <TableHead className="w-[70px] text-right">Кол-во</TableHead>
-                      <TableHead className="w-[70px]">Ед.изм.</TableHead>
-                      <TableHead className="w-[100px] text-right">Цена</TableHead>
+                      <TableHead className="min-w-[130px]">ОЗМ</TableHead>
+                      <TableHead className="min-w-[180px]">Наименование *</TableHead>
+                      <TableHead className="w-[80px] text-right">Кол-во</TableHead>
+                      <TableHead className="w-[100px] text-right">Цена, ₽</TableHead>
+                      <TableHead className="w-[100px] text-right">Итого, ₽</TableHead>
                       {isManufacturing && (
                         <TableHead className="min-w-[100px]">Чертёж</TableHead>
                       )}
@@ -1967,12 +2224,53 @@ function CreateZipRequestDialog({
                     {items.map((item, idx) => (
                       <TableRow key={idx}>
                         <TableCell>
-                          <Input
-                            value={item.articleNumber}
-                            onChange={(e) => updateItem(idx, 'articleNumber', e.target.value)}
-                            placeholder="Арт."
-                            className="h-8 text-xs"
-                          />
+                          <div className="relative">
+                            <Input
+                              value={item.articleNumber}
+                              onChange={(e) => {
+                                updateItem(idx, 'articleNumber', e.target.value)
+                                handleSpSearch(idx, e.target.value)
+                              }}
+                              onFocus={() => handleSpSearch(idx, item.articleNumber)}
+                              placeholder="ОЗМ"
+                              className="h-8 text-xs pr-14"
+                            />
+                            <div className="absolute right-0.5 top-1/2 -translate-y-1/2 flex items-center">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-6 hover:bg-muted"
+                                onClick={() => pasteFromClipboard()}
+                                title="Вставить таблицу из буфера обмена (TSV)"
+                              >
+                                <ClipboardPaste className="size-3 text-muted-foreground" />
+                              </Button>
+                            </div>
+                            {spSearchIdx === idx && spSearchLoading && (
+                              <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                                <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                              </div>
+                            )}
+                            {spSearchIdx === idx && spSearchResults.length > 0 && !spSearchLoading && (
+                              <div className="absolute z-50 mt-1 w-64 max-h-40 overflow-y-auto rounded-lg border bg-popover shadow-lg">
+                                {spSearchResults.map((sp) => (
+                                  <button
+                                    key={sp.id}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors"
+                                    onClick={() => selectSparePart(idx, sp)}
+                                  >
+                                    <span className="shrink-0 font-mono text-orange-600">{sp.code}</span>
+                                    <span className="truncate">{sp.name}</span>
+                                    {sp.currentStock > 0 && (
+                                      <span className="ml-auto shrink-0 text-muted-foreground">ост: {sp.currentStock}</span>
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Input
@@ -1995,14 +2293,6 @@ function CreateZipRequestDialog({
                         </TableCell>
                         <TableCell>
                           <Input
-                            value={item.unit}
-                            onChange={(e) => updateItem(idx, 'unit', e.target.value)}
-                            className="h-8 text-xs"
-                            placeholder="шт"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
                             type="number"
                             step="0.01"
                             value={item.unitPrice || ''}
@@ -2016,6 +2306,11 @@ function CreateZipRequestDialog({
                             className="h-8 text-xs text-right"
                             placeholder="0"
                           />
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-medium tabular-nums">
+                          {item.unitPrice && item.quantity
+                            ? (item.unitPrice * item.quantity).toLocaleString('ru-RU', { minimumFractionDigits: 2 })
+                            : '—'}
                         </TableCell>
                         {isManufacturing && (
                           <TableCell>
@@ -2172,7 +2467,7 @@ function CreateZipRequestDialog({
           )}
 
           {/* Navigation */}
-          <SheetFooter className="mt-6 gap-2 border-t pt-4 sm:flex-col">
+          <DialogFooter className="mt-6 gap-2 border-t pt-4 flex-col sm:flex-col">
             <div className="flex w-full gap-2">
               {step > 1 && (
                 <Button variant="outline" onClick={prevStep} className="flex-1">
@@ -2180,40 +2475,52 @@ function CreateZipRequestDialog({
                 </Button>
               )}
               {step < 4 ? (
-                <Button
-                  onClick={nextStep}
-                  className="flex-1 gap-1.5 bg-orange-600 hover:bg-orange-700"
-                >
+                <Button onClick={nextStep} className="flex-1 gap-1.5 bg-orange-600 hover:bg-orange-700">
                   Далее
                   <ArrowRight className="size-4" />
                 </Button>
-              ) : (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="flex-1 gap-1.5 bg-orange-600 hover:bg-orange-700"
-                >
-                  {submitting ? (
-                    <>
+              ) : step === 4 ? (
+                <>
+                  <Button
+                    onClick={() => submitRequest(false)}
+                    disabled={submitting}
+                    variant="outline"
+                    className="flex-1 gap-1.5"
+                  >
+                    {submitting ? (
                       <Loader2 className="size-4 animate-spin" />
-                      Создание...
-                    </>
-                  ) : (
-                    <>
+                    ) : (
+                      <ClipboardCheck className="size-4" />
+                    )}
+                    Сохранить
+                  </Button>
+                  <Button
+                    onClick={() => submitRequest(true)}
+                    disabled={submitting}
+                    className="flex-1 gap-1.5 bg-orange-600 hover:bg-orange-700"
+                  >
+                    {submitting ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
                       <Send className="size-4" />
-                      Создать заявку
-                    </>
-                  )}
+                    )}
+                    Отправить на согласование
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={nextStep} className="flex-1 gap-1.5 bg-orange-600 hover:bg-orange-700">
+                  Далее
+                  <ArrowRight className="size-4" />
                 </Button>
               )}
             </div>
             <Button variant="ghost" onClick={handleClose} className="w-full">
               Отмена
             </Button>
-          </SheetFooter>
+          </DialogFooter>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -2236,6 +2543,11 @@ function ZipRequestsTab() {
   const [createOpen, setCreateOpen] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editRequest, setEditRequest] = useState<ZipRequest | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteRequest, setDeleteRequest] = useState<ZipRequest | null>(null)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
 
   const { user } = useAuthStore()
 
@@ -2272,6 +2584,39 @@ function ZipRequestsTab() {
   const openDetail = (id: string) => {
     setDetailId(id)
     setDetailOpen(true)
+  }
+
+  const openEditDialog = (req: ZipRequest) => {
+    setEditRequest(req)
+    setEditOpen(true)
+  }
+
+  const openDeleteDialog = (req: ZipRequest) => {
+    setDeleteRequest(req)
+    setDeleteOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (!deleteRequest) return
+    setDeleteSubmitting(true)
+    try {
+      const res = await fetch(`/api/zip-requests/${deleteRequest.id}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        toast.success('Заявка удалена')
+        setDeleteOpen(false)
+        setDeleteRequest(null)
+        fetchRequests()
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Ошибка при удалении')
+      }
+    } catch {
+      toast.error('Ошибка сети')
+    } finally {
+      setDeleteSubmitting(false)
+    }
   }
 
   const totalPages = Math.ceil(total / limit)
@@ -2360,8 +2705,7 @@ function ZipRequestsTab() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Все типы</SelectItem>
-              <SelectItem value="purchase_no_equip">Закупка (без привязки)</SelectItem>
-              <SelectItem value="purchase_with_equip">Закупка (с привязкой)</SelectItem>
+              <SelectItem value="purchase">Закупка РМ и ЗИП</SelectItem>
               <SelectItem value="manufacturing">Изготовление</SelectItem>
             </SelectContent>
           </Select>
@@ -2423,6 +2767,7 @@ function ZipRequestsTab() {
                   <TableHead>Статус</TableHead>
                   <TableHead className="hidden md:table-cell">Дата</TableHead>
                   <TableHead className="hidden sm:table-cell">Автор</TableHead>
+                  <TableHead className="hidden lg:table-cell">Заявитель</TableHead>
                   <TableHead className="pr-6 text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
@@ -2430,10 +2775,10 @@ function ZipRequestsTab() {
                 {loading ? (
                   Array.from({ length: 6 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 9 }).map((_, j) => (
+                      {Array.from({ length: 10 }).map((_, j) => (
                         <TableCell
                           key={j}
-                          className={j === 0 ? 'pl-6' : j === 8 ? 'pr-6 text-right' : ''}
+                          className={j === 0 ? 'pl-6' : j === 9 ? 'pr-6 text-right' : ''}
                         >
                           <Skeleton className="h-5 w-16" />
                         </TableCell>
@@ -2442,7 +2787,7 @@ function ZipRequestsTab() {
                   ))
                 ) : requests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-64 text-center">
+                    <TableCell colSpan={10} className="h-64 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <FileSpreadsheet className="size-12 text-muted-foreground/40" />
                         <p className="max-w-md text-sm text-muted-foreground">
@@ -2491,15 +2836,35 @@ function ZipRequestsTab() {
                       <TableCell className="hidden text-xs text-muted-foreground sm:table-cell max-w-[120px] truncate">
                         {req.authorName}
                       </TableCell>
+                      <TableCell className="hidden text-xs text-muted-foreground lg:table-cell max-w-[120px] truncate">
+                        {req.applicantName || '—'}
+                      </TableCell>
                       <TableCell className="pr-6 text-right" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => openDetail(req.id)}
-                        >
-                          <Eye className="size-4" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="size-8">
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem className="gap-2" onClick={() => openDetail(req.id)}>
+                              <Eye className="size-4" /> Просмотр
+                            </DropdownMenuItem>
+                            {(req.status === 'draft' || req.status === 'cancelled') && (
+                              <DropdownMenuItem className="gap-2" onClick={() => openEditDialog(req)}>
+                                <Pencil className="size-4" /> Редактировать
+                              </DropdownMenuItem>
+                            )}
+                            {(req.status === 'draft' || req.status === 'cancelled' || user?.role === 'admin') && (
+                              <DropdownMenuItem
+                                className="gap-2 text-destructive"
+                                onClick={() => openDeleteDialog(req)}
+                              >
+                                <Trash2 className="size-4" /> Удалить
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
@@ -2544,6 +2909,17 @@ function ZipRequestsTab() {
         onSuccess={fetchRequests}
       />
 
+      {/* Edit dialog */}
+      <CreateZipRequestDialog
+        open={editOpen}
+        editRequest={editRequest}
+        onClose={() => {
+          setEditOpen(false)
+          setEditRequest(null)
+        }}
+        onSuccess={fetchRequests}
+      />
+
       {/* Detail dialog */}
       <ZipRequestDetailDialog
         requestId={detailId}
@@ -2554,6 +2930,29 @@ function ZipRequestsTab() {
           fetchRequests()
         }}
       />
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={(v) => { setDeleteOpen(v); if (!v) setDeleteRequest(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить заявку #{deleteRequest?.requestNumber}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Заявка «{deleteRequest?.title}» будет удалена без возможности восстановления.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSubmitting}>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteSubmitting}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {deleteSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -2574,7 +2973,7 @@ function ApprovalRouteDialog({
   editRoute: ApprovalRoute | null
 }) {
   const [name, setName] = useState('')
-  const [type, setType] = useState<string>('purchase_no_equip')
+  const [type, setType] = useState<string>('purchase')
   const [description, setDescription] = useState('')
   const [isActive, setIsActive] = useState(true)
   const [steps, setSteps] = useState<ApprovalStep[]>([
@@ -2601,7 +3000,7 @@ function ApprovalRouteDialog({
       )
     } else {
       setName('')
-      setType('purchase_no_equip')
+      setType('purchase')
       setDescription('')
       setIsActive(true)
       setSteps([{ stepOrder: 1, role: 'manager', position: '', description: '', isOptional: false }])
@@ -2722,8 +3121,7 @@ function ApprovalRouteDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="purchase_no_equip">Закупка (без привязки)</SelectItem>
-                  <SelectItem value="purchase_with_equip">Закупка (с привязкой)</SelectItem>
+                  <SelectItem value="purchase">Закупка РМ и ЗИП</SelectItem>
                   <SelectItem value="manufacturing">Изготовление</SelectItem>
                 </SelectContent>
               </Select>

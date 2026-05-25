@@ -4,6 +4,34 @@ import { getSessionUser } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
+// Helper: map raw Prisma ZipRequest to frontend-friendly format
+function mapZipRequest(item: any) {
+  return {
+    ...item,
+    requestNumber: item.number,
+    equipmentName: item.equipment?.name || null,
+    equipmentCode: item.equipment?.code || null,
+    authorId: item.author?.id || '',
+    authorName: item.author?.name || '',
+    authorRole: item.author?.role || '',
+    applicantDepartmentName: item.applicantDepartment?.name || null,
+    approvalActions: (item.approvalActions || []).map((a: any) => ({
+      id: a.id,
+      stepId: a.approvalStepId,
+      stepOrder: a.approvalStep?.stepOrder || 0,
+      role: a.approvalStep?.role || '',
+      position: a.approvalStep?.position || '',
+      description: a.approvalStep?.description || '',
+      isOptional: a.approvalStep?.isOptional || false,
+      action: a.status,
+      userId: a.decidedByUser?.id || null,
+      userName: a.decidedByUser?.name || null,
+      comment: a.comment || null,
+      actedAt: a.decidedAt ? new Date(a.decidedAt).toISOString() : null,
+    })),
+  }
+}
+
 // ─── GET: List ZIP requests with pagination, filtering, and search ───
 export async function GET(request: NextRequest) {
   try {
@@ -52,6 +80,9 @@ export async function GET(request: NextRequest) {
           author: {
             select: { id: true, name: true, email: true, role: true },
           },
+          applicantDepartment: {
+            select: { id: true, name: true, code: true },
+          },
           equipment: {
             select: { id: true, name: true, code: true },
           },
@@ -97,8 +128,11 @@ export async function GET(request: NextRequest) {
       statusCountMap[sc.status] = sc._count.status
     }
 
+    // Map raw Prisma objects to frontend-friendly format
+    const mappedItems = items.map(mapZipRequest)
+
     return NextResponse.json({
-      items,
+      items: mappedItems,
       total,
       page,
       limit,
@@ -128,6 +162,9 @@ export async function POST(request: NextRequest) {
       equipmentId,
       priority,
       items,
+      applicantName,
+      applicantDepartmentId,
+      submitForApproval,
     } = body
 
     // Validate required fields
@@ -139,20 +176,12 @@ export async function POST(request: NextRequest) {
     }
 
     const validTypes = [
-      'purchase_no_equip',
-      'purchase_with_equip',
+      'purchase',
       'manufacturing',
     ]
     if (!validTypes.includes(type)) {
       return NextResponse.json(
         { error: 'Неверный тип заявки' },
-        { status: 400 },
-      )
-    }
-
-    if (type === 'purchase_with_equip' && !equipmentId) {
-      return NextResponse.json(
-        { error: 'Для данного типа заявки необходимо указать оборудование' },
         { status: 400 },
       )
     }
@@ -189,6 +218,8 @@ export async function POST(request: NextRequest) {
     })
 
     // Determine status and approval data
+    // If submitForApproval is true and route exists, go to pending_approval
+    // Otherwise save as draft
     let status = 'draft'
     let approvalRouteId: string | null = null
     let currentStepOrder = 0
@@ -198,7 +229,7 @@ export async function POST(request: NextRequest) {
       status: string
     }[] = []
 
-    if (approvalRoute && approvalRoute.steps.length > 0) {
+    if (submitForApproval && approvalRoute && approvalRoute.steps.length > 0) {
       status = 'pending_approval'
       approvalRouteId = approvalRoute.id
       currentStepOrder = approvalRoute.steps[0].stepOrder
@@ -222,9 +253,11 @@ export async function POST(request: NextRequest) {
           description: description || null,
           neededBy: neededBy || null,
           equipmentId: equipmentId || null,
-          priority: priority || 'medium',
+          priority: priority || 'additional',
           status,
           requestedBy: user.id,
+          applicantName: applicantName || null,
+          applicantDepartmentId: applicantDepartmentId || null,
           approvalRouteId,
           currentStepOrder,
         },
@@ -287,6 +320,9 @@ export async function POST(request: NextRequest) {
         author: {
           select: { id: true, name: true, email: true, role: true },
         },
+        applicantDepartment: {
+          select: { id: true, name: true, code: true },
+        },
         equipment: {
           select: { id: true, name: true, code: true },
         },
@@ -336,7 +372,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(fullRequest, { status: 201 })
+    return NextResponse.json(mapZipRequest(fullRequest), { status: 201 })
   } catch (error) {
     console.error('ZIP request create error:', error)
     if (error instanceof Error && error.message.includes('Каждая позиция')) {
