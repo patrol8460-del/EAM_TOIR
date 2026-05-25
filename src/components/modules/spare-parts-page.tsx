@@ -1164,7 +1164,8 @@ function ZipRequestDetailDialog({
       const res = await fetch(`/api/zip-requests/${requestId}/files`)
       if (res.ok) {
         const data = await res.json()
-        setFileList(Array.isArray(data) ? data : data.items || [])
+        const items = Array.isArray(data) ? data : data.files || data.items || []
+        setFileList(items)
       }
     } catch {
       // silent
@@ -1255,7 +1256,7 @@ function ZipRequestDetailDialog({
   const canApprove =
     !!user &&
     !!pendingAction &&
-    user.role === pendingAction.role &&
+    (user.role === pendingAction.role || user.role === 'admin') &&
     request?.status === 'pending_approval'
 
   const totalCost = request?.items?.reduce(
@@ -2850,12 +2851,12 @@ function ZipRequestsTab() {
                             <DropdownMenuItem className="gap-2" onClick={() => openDetail(req.id)}>
                               <Eye className="size-4" /> Просмотр
                             </DropdownMenuItem>
-                            {(req.status === 'draft' || req.status === 'cancelled') && (
+                            {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && (
                               <DropdownMenuItem className="gap-2" onClick={() => openEditDialog(req)}>
                                 <Pencil className="size-4" /> Редактировать
                               </DropdownMenuItem>
                             )}
-                            {(req.status === 'draft' || req.status === 'cancelled' || user?.role === 'admin') && (
+                            {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected' || user?.role === 'admin') && (
                               <DropdownMenuItem
                                 className="gap-2 text-destructive"
                                 onClick={() => openDeleteDialog(req)}
@@ -3288,7 +3289,7 @@ function ApprovalRoutesTab() {
       const res = await fetch('/api/approval-routes')
       if (res.ok) {
         const data = await res.json()
-        setRoutes(data.items || [])
+        setRoutes(Array.isArray(data) ? data : data.items || [])
       }
     } catch {
       toast.error('Ошибка загрузки маршрутов')

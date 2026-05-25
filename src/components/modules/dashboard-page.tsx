@@ -17,12 +17,18 @@ import {
   Edit,
   Trash2,
   UserPlus,
+  CheckCircle2,
+  XCircle,
+  Bell,
+  ClipboardList,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
 import { useAppStore, type ModuleKey } from '@/store/app-store'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from 'sonner'
 
 interface DashboardStats {
   totalEquipment: number
@@ -41,6 +47,24 @@ interface ActivityItem {
   details: string | null
   userName: string
   createdAt: string
+}
+
+interface PersonalTask {
+  id: string
+  type: 'approval' | 'request_draft' | 'request_rejected'
+  entityType: string
+  entityId: string
+  title: string
+  description: string
+  role: string
+  status: string
+  createdAt: string
+}
+
+interface PersonalSummary {
+  pendingApprovals: number
+  rejectedRequests: number
+  draftRequests: number
 }
 
 const actionLabels: Record<string, string> = {
@@ -114,7 +138,10 @@ export default function DashboardPage() {
   const setActiveModule = useAppStore((s) => s.setActiveModule)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activity, setActivity] = useState<ActivityItem[]>([])
+  const [tasks, setTasks] = useState<PersonalTask[]>([])
+  const [taskSummary, setTaskSummary] = useState<PersonalSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [tasksLoading, setTasksLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
@@ -131,9 +158,26 @@ export default function DashboardPage() {
     }
   }, [])
 
+  const fetchPersonalTasks = useCallback(async () => {
+    setTasksLoading(true)
+    try {
+      const res = await fetch('/api/dashboard/personal')
+      if (res.ok) {
+        const data = await res.json()
+        setTasks(data.tasks || [])
+        setTaskSummary(data.summary)
+      }
+    } catch {
+      // silent
+    } finally {
+      setTasksLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchData()
-  }, [fetchData])
+    fetchPersonalTasks()
+  }, [fetchData, fetchPersonalTasks])
 
   const statCards = [
     {
@@ -231,6 +275,82 @@ export default function DashboardPage() {
           Ремонтная служба предприятия
         </p>
       </div>
+
+      {/* Personal Tasks */}
+      {(taskSummary && (taskSummary.pendingApprovals + taskSummary.rejectedRequests + taskSummary.draftRequests > 0)) && (
+        <Card className="border-orange-200 bg-orange-50/50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Bell className="size-5 text-orange-600" />
+                Мои задачи
+              </CardTitle>
+              <div className="flex gap-2">
+                {taskSummary.pendingApprovals > 0 && (
+                  <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                    На согласовании: {taskSummary.pendingApprovals}
+                  </Badge>
+                )}
+                {taskSummary.rejectedRequests > 0 && (
+                  <Badge className="bg-red-100 text-red-700 border-red-200">
+                    Отклонено: {taskSummary.rejectedRequests}
+                  </Badge>
+                )}
+                {taskSummary.draftRequests > 0 && (
+                  <Badge className="bg-slate-100 text-slate-700 border-slate-200">
+                    Черновики: {taskSummary.draftRequests}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {tasksLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg bg-white p-3">
+                    <Skeleton className="size-8 rounded" />
+                    <div className="flex-1 space-y-1">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                tasks.slice(0, 8).map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-3 rounded-lg bg-white p-3 transition-colors hover:bg-orange-50 cursor-pointer"
+                    onClick={() => {
+                      if (task.entityType === 'zip-request') {
+                        setActiveModule('spare-parts')
+                      }
+                    }}
+                  >
+                    <div className={`flex size-8 items-center justify-center rounded-lg shrink-0 ${
+                      task.type === 'approval' ? 'bg-amber-100' :
+                      task.type === 'request_rejected' ? 'bg-red-100' : 'bg-slate-100'
+                    }`}>
+                      {task.type === 'approval' && <ClipboardList className="size-4 text-amber-600" />}
+                      {task.type === 'request_rejected' && <XCircle className="size-4 text-red-600" />}
+                      {task.type === 'request_draft' && <Edit className="size-4 text-slate-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{task.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-muted-foreground">{task.status}</p>
+                      <p className="text-xs text-muted-foreground">{formatTimeAgo(task.createdAt)}</p>
+                    </div>
+                    <ArrowRight className="size-4 text-muted-foreground/50 shrink-0" />
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

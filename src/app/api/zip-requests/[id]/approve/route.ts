@@ -156,10 +156,13 @@ export async function POST(
 
       // Update the request
       if (action === 'reject') {
-        // Rejection — set request status to rejected
+        // Rejection — return request to applicant for editing/deleting
         return await tx.zipRequest.update({
           where: { id },
-          data: { status: 'rejected' },
+          data: {
+            status: 'rejected',
+            currentStepOrder: 1,
+          },
         })
       }
 

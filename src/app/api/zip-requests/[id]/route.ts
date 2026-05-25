@@ -383,10 +383,10 @@ export async function DELETE(
       )
     }
 
-    // Status check: only draft or cancelled
-    if (existing.status !== 'draft' && existing.status !== 'cancelled') {
+    // Status check: only draft, cancelled, or rejected
+    if (existing.status !== 'draft' && existing.status !== 'cancelled' && existing.status !== 'rejected') {
       return NextResponse.json(
-        { error: 'Удалить можно только черновик или отменённую заявку' },
+        { error: 'Удалить можно только черновик, отклонённую или отменённую заявку' },
         { status: 400 },
       )
     }
