@@ -157,11 +157,12 @@ export async function POST(
       // Update the request
       if (action === 'reject') {
         // Rejection — return request to applicant for editing/deleting
+        // Reset currentStepOrder to 0 since the approval route is finished
         return await tx.zipRequest.update({
           where: { id },
           data: {
             status: 'rejected',
-            currentStepOrder: 1,
+            currentStepOrder: 0,
           },
         })
       }

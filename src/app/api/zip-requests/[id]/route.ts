@@ -127,7 +127,7 @@ export async function GET(
   }
 }
 
-// ─── PUT: Update a ZIP request (only draft requests by author) ───
+// ─── PUT: Update a ZIP request (draft or rejected requests by author) ───
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -163,16 +163,16 @@ export async function PUT(
       )
     }
 
-    // Only draft requests can be edited (unless cancelling)
+    // Only draft or rejected requests can be edited (unless cancelling)
     const body = await request.json()
     const { title, description, neededBy, priority, status, items, applicantName, applicantDepartmentId, submitForApproval } = body
 
     // Allow status change only from draft to cancelled
     if (status) {
       if (status === 'cancelled') {
-        if (existing.status !== 'draft') {
+        if (existing.status !== 'draft' && existing.status !== 'rejected') {
           return NextResponse.json(
-            { error: 'Отменить можно только черновик' },
+            { error: 'Отменить можно только черновик или отклонённую заявку' },
             { status: 400 },
           )
         }
@@ -194,8 +194,9 @@ export async function PUT(
     if (applicantDepartmentId !== undefined) updateData.applicantDepartmentId = applicantDepartmentId
     if (status === 'cancelled') updateData.status = 'cancelled'
 
-    // Handle submitForApproval for drafts
-    if (submitForApproval && existing.status === 'draft') {
+    // Handle submitForApproval for drafts or re-submission of rejected requests
+    const canSubmitForApproval = submitForApproval && (existing.status === 'draft' || existing.status === 'rejected')
+    if (canSubmitForApproval) {
       const approvalRoute = await db.approvalRoute.findFirst({
         where: { type: existing.type, isActive: true },
         include: { steps: { orderBy: { stepOrder: 'asc' } } },
@@ -205,6 +206,7 @@ export async function PUT(
         updateData.approvalRouteId = approvalRoute.id
         updateData.currentStepOrder = approvalRoute.steps[0].stepOrder
         // Create approval actions inside the transaction below
+        // For rejected requests, old approval actions will be deleted first
       }
     }
 
@@ -217,7 +219,13 @@ export async function PUT(
       })
 
       // If submitForApproval, create approval action records
-      if (submitForApproval && existing.status === 'draft' && updateData.approvalRouteId) {
+      // For rejected requests: delete old actions first, then create new ones
+      if (canSubmitForApproval && updateData.approvalRouteId) {
+        // Delete existing approval actions (needed for rejected -> re-submit flow)
+        await tx.approvalAction.deleteMany({
+          where: { zipRequestId: id },
+        })
+
         const approvalRoute = await tx.approvalRoute.findFirst({
           where: { type: existing.type, isActive: true },
           include: { steps: { orderBy: { stepOrder: 'asc' } } },
@@ -235,7 +243,7 @@ export async function PUT(
         }
       }
 
-      // Replace items if provided (only for draft status)
+      // Replace items if provided (for draft or rejected status)
       if (items && Array.isArray(items)) {
         // Delete all existing items
         await tx.zipRequestItem.deleteMany({

@@ -5,8 +5,9 @@ import { Wrench, Mail, Lock, Eye, EyeOff, Info } from 'lucide-react'
 
 const demoCredentials = [
   { email: 'admin@enterprise.ru', password: 'admin123', role: 'Администратор' },
-  { email: 'manager@enterprise.ru', password: 'manager123', role: 'Менеджер' },
-  { email: 'engineer@enterprise.ru', password: 'engineer123', role: 'Инженер' },
+  { email: 'manager@enterprise.ru', password: 'admin123', role: 'Менеджер' },
+  { email: 'engineer@enterprise.ru', password: 'admin123', role: 'Инженер' },
+  { email: 'worker@enterprise.ru', password: 'admin123', role: 'Рабочий' },
 ]
 
 interface User {

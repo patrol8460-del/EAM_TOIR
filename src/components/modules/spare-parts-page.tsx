@@ -1161,7 +1161,9 @@ function ZipRequestDetailDialog({
   const fetchFiles = useCallback(async () => {
     if (!requestId) return
     try {
-      const res = await fetch(`/api/zip-requests/${requestId}/files`)
+      const res = await fetch(`/api/zip-requests/${requestId}/files`, {
+        credentials: 'include',
+      })
       if (res.ok) {
         const data = await res.json()
         const items = Array.isArray(data) ? data : data.files || data.items || []
@@ -1217,6 +1219,7 @@ function ZipRequestDetailDialog({
         const res = await fetch(`/api/zip-requests/${requestId}/files`, {
           method: 'POST',
           body: fd,
+          credentials: 'include',
         })
         if (!res.ok) {
           const data = await res.json()
@@ -1240,6 +1243,7 @@ function ZipRequestDetailDialog({
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileId }),
+        credentials: 'include',
       })
       if (res.ok) {
         toast.success('Файл удалён')
@@ -1283,6 +1287,12 @@ function ZipRequestDetailDialog({
                   {PRIORITY_LABELS[request.priority]}
                 </Badge>
               </SheetDescription>
+              {request.status === 'rejected' && (
+                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+                  <p className="font-medium text-red-700">Заявка отклонена</p>
+                  <p className="text-red-600 mt-1">Вы можете отредактировать заявку и повторно отправить на согласование, либо удалить её.</p>
+                </div>
+              )}
             </SheetHeader>
 
             <div className="mt-4 space-y-6 px-4 pb-4">
@@ -1436,7 +1446,7 @@ function ZipRequestDetailDialog({
                     size="sm"
                     className="gap-1.5"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading || request.status !== 'draft'}
+                    disabled={uploading || (request.status !== 'draft' && request.status !== 'rejected')}
                   >
                     {uploading ? (
                       <Loader2 className="size-3.5 animate-spin" />
@@ -1473,7 +1483,7 @@ function ZipRequestDetailDialog({
                           <Button variant="ghost" size="icon" className="size-7">
                             <Download className="size-3.5" />
                           </Button>
-                          {(request.status === 'draft' || user?.role === 'admin') && (
+                          {(request.status === 'draft' || request.status === 'rejected' || user?.role === 'admin') && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1949,7 +1959,7 @@ function CreateZipRequestDialog({
           const fd = new FormData()
           fd.append('file', f.file)
           try {
-            await fetch(`/api/zip-requests/${createdOrUpdated.id}/files`, { method: 'POST', body: fd })
+            await fetch(`/api/zip-requests/${createdOrUpdated.id}/files`, { method: 'POST', body: fd, credentials: 'include' })
           } catch { /* continue */ }
         }
       }
@@ -2603,6 +2613,7 @@ function ZipRequestsTab() {
     try {
       const res = await fetch(`/api/zip-requests/${deleteRequest.id}`, {
         method: 'DELETE',
+        credentials: 'include',
       })
       if (res.ok) {
         toast.success('Заявка удалена')
@@ -2830,6 +2841,25 @@ function ZipRequestsTab() {
                         <Badge variant="outline" className={`text-xs ${STATUS_COLORS[req.status]}`}>
                           {STATUS_LABELS[req.status]}
                         </Badge>
+                        {req.status === 'pending_approval' && req.approvalActions && req.approvalActions.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1">
+                            {req.approvalActions.map((action, idx) => (
+                              <div
+                                key={action.id || idx}
+                                className={`w-2 h-2 rounded-full ${
+                                  action.action === 'approved'
+                                    ? 'bg-emerald-500'
+                                    : action.action === 'rejected'
+                                      ? 'bg-red-500'
+                                      : action.action === 'skipped'
+                                        ? 'bg-gray-300'
+                                        : 'bg-amber-400 animate-pulse'
+                                }`}
+                                title={`${action.position || ''}: ${action.action === 'approved' ? 'Согласовано' : action.action === 'rejected' ? 'Отклонено' : action.action === 'skipped' ? 'Пропущен' : 'Ожидает'}`}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                         {formatDate(req.createdAt)}

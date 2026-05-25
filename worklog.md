@@ -79,3 +79,77 @@ Stage Summary:
 - Author column already existed in table - confirmed working
 - New features: applicant department selection, save/send approval buttons, edit/delete actions
 - All changes built and deployed successfully, server running on port 3000
+---
+Task ID: 2
+Agent: main
+Task: Fix frontend bugs in spare parts module — auth, approval UI, rejected request handling
+
+Work Log:
+- Added `credentials: 'include'` to all fetch calls in ZipRequestDetailDialog:
+  - fetchFiles (GET /api/zip-requests/[id]/files)
+  - handleFileUpload (POST /api/zip-requests/[id]/files)
+  - handleDeleteFile (DELETE /api/zip-requests/[id]/files)
+- Added `credentials: 'include'` to file upload fetch in CreateZipRequestDialog.submitRequest
+- Added `credentials: 'include'` to delete fetch in ZipRequestsTab.handleDelete
+- Added approval progress dots in ZipRequestsTab table rows for pending_approval status (colored dots: green=approved, red=rejected, gray=skipped, amber pulsing=pending)
+- Enabled file upload button for rejected requests (changed disabled condition to also allow 'rejected')
+- Enabled file delete button for rejected requests (added request.status === 'rejected' to condition)
+- Added rejection info banner in ZipRequestDetailDialog header explaining user can edit/resubmit or delete
+- Verified delete button already visible for rejected requests in table dropdown menu
+
+Stage Summary:
+- All file upload/delete API calls now include auth credentials
+- Mini approval progress indicator shows in requests list for pending_approval items
+- Rejected requests can now be edited, have files attached, and be deleted
+- Rejected request detail view shows helpful banner with next steps
+- Lint passes clean on spare-parts-page.tsx (pre-existing errors in other files only)
+---
+Task ID: 1
+Agent: main
+Task: Fix 5 backend bugs in spare parts module — rejected request editing, approval rejection, demo credentials, seed routes
+
+Work Log:
+- Fixed PUT /api/zip-requests/[id] — allowed editing rejected requests (not just drafts)
+  - Changed status guard to also allow 'rejected' status
+  - When submitForApproval=true on a rejected request: deletes old ApprovalAction records, finds active approval route, creates new ApprovalAction records, sets status to 'pending_approval' with reset currentStepOrder
+  - Updated comment and cancel-check to cover both draft and rejected statuses
+- Verified DELETE /api/zip-requests/[id] — already correctly allows 'rejected' status (line 387)
+- Fixed POST /api/zip-requests/[id]/approve rejection logic — changed currentStepOrder from 1 to 0 when a request is rejected (route is finished, no active step)
+- Updated login form demo credentials in /src/components/auth/login-form.tsx:
+  - All accounts now use password 'admin123' (was individual passwords)
+  - Added worker@enterprise.ru / admin123 / Рабочий account
+- Created /api/seed-approval-routes GET endpoint (admin-only):
+  - Seeds "Закупка ЗИП" (purchase) with steps: engineer → manager
+  - Seeds "Изготовление ЗИП" (manufacturing) with steps: engineer → manager → admin
+  - Only creates if active route of that type doesn't already exist
+  - Returns created/existing route summary
+- Updated /src/app/page.tsx — after admin login, fire-and-forget calls /api/seed-approval-routes to ensure routes exist for new installations
+
+Stage Summary:
+- Rejected ZIP requests can now be edited and re-submitted through the approval workflow
+- Approval rejection correctly resets currentStepOrder to 0
+- Demo credentials updated to match provided values with worker account added
+- Approval routes auto-seed on first admin login for new installations
+- Lint clean (only pre-existing errors in unrelated files)
+---
+Task ID: 1
+Agent: main
+Task: Fix 5 bugs in the "Запасные части" (Spare Parts) module
+
+Work Log:
+- Read and analyzed all relevant source files: spare-parts-page.tsx, API routes, auth, schema, login form, dashboard
+- Identified root causes for all 5 bugs
+- Dispatched two parallel Task agents for backend and frontend fixes
+- Backend agent fixed: PUT endpoint for rejected request editing/re-submission, approval rejection currentStepOrder, login demo credentials, seed approval routes endpoint
+- Frontend agent fixed: file upload credentials, approval progress dots in list, delete for rejected requests, rejection info banner, file upload for rejected requests
+- Root-owned seed-approval-routes file issue resolved by recreating with correct ownership
+- Seed endpoint had 404 issue - replaced with inline seeding in login handler
+- Manually seeded approval routes via POST /api/approval-routes for purchase (engineer→manager) and manufacturing (engineer→manager→admin)
+
+Stage Summary:
+- Bug 1 (File upload): Fixed - added `credentials: 'include'` to all file upload fetch calls
+- Bug 2 (Approval routes display): Fixed - added colored progress dots in ZipRequestsTab list for pending_approval status
+- Bug 3 (Rejection logic): Fixed - PUT endpoint now allows editing rejected requests and re-submitting creates fresh approval actions
+- Bug 4 (Delete rejected): Verified DELETE endpoint already allows rejected; added credentials to frontend fetch
+- Bug 5 (Personal dashboard): Already implemented in dashboard-page.tsx with /api/dashboard/personal endpoint showing pending approvals, rejected requests, drafts
+- Bonus: Updated login demo credentials, seeded default approval routes, added rejection info banner in detail view
