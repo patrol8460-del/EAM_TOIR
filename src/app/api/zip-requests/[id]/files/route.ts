@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
-import { writeFile, mkdir, unlink } from 'fs/promises'
+import { writeFile, mkdir, unlink, readFile, stat } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
+import { existsSync } from 'fs'
 
 export const dynamic = 'force-dynamic'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-const UPLOAD_DIR = 'uploads/zip'
+// Use absolute path for persistence across builds
+const UPLOAD_DIR = join(process.env.HOME || '/home/z', 'my-project', 'uploads', 'zip')
 
 // ─── GET: List files for a ZIP request ───
 export async function GET(
@@ -118,14 +120,12 @@ export async function POST(
     const storedFileName = `${uniquePrefix}${fileExtension}`
 
     // Ensure upload directory exists
-    const fullUploadDir = join(process.cwd(), UPLOAD_DIR)
-    await mkdir(fullUploadDir, { recursive: true })
+    await mkdir(UPLOAD_DIR, { recursive: true })
 
-    // Save file to disk
+    // Save file to disk (absolute path for persistence)
     const filePath = join(UPLOAD_DIR, storedFileName)
-    const absoluteFilePath = join(process.cwd(), filePath)
     const fileBuffer = Buffer.from(await file.arrayBuffer())
-    await writeFile(absoluteFilePath, fileBuffer)
+    await writeFile(filePath, fileBuffer)
 
     // Create file record in database
     const fileRecord = await db.zipRequestFile.create({
@@ -227,8 +227,7 @@ export async function DELETE(
 
     // Delete file from disk
     try {
-      const absolutePath = join(process.cwd(), fileRecord.filePath)
-      await unlink(absolutePath)
+      await unlink(fileRecord.filePath)
     } catch (fileError) {
       console.warn(
         `Failed to delete file ${fileRecord.fileName} from disk:`,

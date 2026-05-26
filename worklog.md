@@ -230,3 +230,25 @@ Stage Summary:
   - Draft tasks → edit dialog for completion
 - Auto-switches to "Потребности" tab when coming from bell
 - All pre-existing stub texts removed from build
+
+---
+Task ID: 3
+Agent: Main
+Task: Fix 2 code bugs — file upload persistence and dashboard personal tasks
+
+Work Log:
+- Found bug #1: File uploads saved to relative path `uploads/zip/` which doesn't persist across production builds
+  - Fixed: Changed UPLOAD_DIR to absolute path `/home/z/my-project/uploads/zip/`
+  - Created new API endpoint `/api/zip-requests/[id]/files/[fileId]/download` for file downloads
+  - Added onClick handler to Download button in UI to use the new endpoint
+  - Fixed DELETE to use absolute path directly
+- Found bug #2: `fetchPersonalTasks` in dashboard-page.tsx missing `credentials: 'include'` → API returns 401
+  - Fixed: Added `credentials: 'include'` to the fetch call
+- Rebuilt production build, verified all endpoints including new download route
+- Lint clean (only pre-existing warnings in utility files)
+
+Stage Summary:
+- File uploads now persist across builds (absolute path `/home/z/my-project/uploads/zip/`)
+- File download works via dedicated API endpoint with proper Content-Disposition headers
+- Dashboard now loads personal tasks correctly (pending approvals, rejected requests, drafts)
+- All changes deployed in production build with auto-restart watchdog

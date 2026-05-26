@@ -1492,7 +1492,14 @@ function ZipRequestDetailDialog({
                           </div>
                         </div>
                         <div className="flex shrink-0 gap-1">
-                          <Button variant="ghost" size="icon" className="size-7">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            onClick={() => {
+                              window.open(`/api/zip-requests/${requestId}/files/${file.id}/download`, '_blank')
+                            }}
+                          >
                             <Download className="size-3.5" />
                           </Button>
                           {(request.status === 'draft' || request.status === 'rejected') && user?.id === request.authorId && (
