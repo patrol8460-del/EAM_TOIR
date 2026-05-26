@@ -2481,51 +2481,53 @@ function CreateZipRequestDialog({
           <DialogFooter className="mt-6 gap-2 border-t pt-4 flex-col sm:flex-row sm:justify-end">
             <div className="flex w-full gap-2 sm:w-auto">
               {step > 1 && (
-                <Button variant="outline" onClick={prevStep} className="h-auto px-3 py-1 text-sm">
+                <Button variant="outline" size="sm" onClick={prevStep} className="h-auto py-0.5 px-2.5 text-xs">
                   Назад
                 </Button>
               )}
               {step < 4 ? (
-                <Button onClick={nextStep} className="h-auto gap-1 px-3 py-1 text-sm bg-orange-600 hover:bg-orange-700">
+                <Button size="sm" onClick={nextStep} className="h-auto py-0.5 px-2.5 gap-1 text-xs bg-orange-600 hover:bg-orange-700">
                   Далее
-                  <ArrowRight className="size-3.5" />
+                  <ArrowRight className="size-3" />
                 </Button>
               ) : step === 4 ? (
                 <>
                   <Button
+                    size="sm"
                     onClick={() => submitRequest(false)}
                     disabled={submitting}
                     variant="outline"
-                    className="h-auto gap-1 px-3 py-1 text-sm"
+                    className="h-auto py-0.5 px-2.5 gap-1 text-xs"
                   >
                     {submitting ? (
-                      <Loader2 className="size-3.5 animate-spin" />
+                      <Loader2 className="size-3 animate-spin" />
                     ) : (
-                      <ClipboardCheck className="size-3.5" />
+                      <ClipboardCheck className="size-3" />
                     )}
                     Сохранить
                   </Button>
                   <Button
+                    size="sm"
                     onClick={() => submitRequest(true)}
                     disabled={submitting}
-                    className="h-auto gap-1 px-3 py-1 text-sm bg-orange-600 hover:bg-orange-700"
+                    className="h-auto py-0.5 px-2.5 gap-1 text-xs bg-orange-600 hover:bg-orange-700"
                   >
                     {submitting ? (
-                      <Loader2 className="size-3.5 animate-spin" />
+                      <Loader2 className="size-3 animate-spin" />
                     ) : (
-                      <Send className="size-3.5" />
+                      <Send className="size-3" />
                     )}
                     Отправить на согласование
                   </Button>
                 </>
               ) : (
-                <Button onClick={nextStep} className="h-auto gap-1 px-3 py-1 text-sm bg-orange-600 hover:bg-orange-700">
+                <Button size="sm" onClick={nextStep} className="h-auto py-0.5 px-2.5 gap-1 text-xs bg-orange-600 hover:bg-orange-700">
                   Далее
-                  <ArrowRight className="size-3.5" />
+                  <ArrowRight className="size-3" />
                 </Button>
               )}
             </div>
-            <Button variant="ghost" onClick={handleClose} className="h-auto px-3 py-1 text-sm">
+            <Button variant="ghost" size="sm" onClick={handleClose} className="h-auto py-0.5 px-2.5 text-xs">
               Отмена
             </Button>
           </DialogFooter>
