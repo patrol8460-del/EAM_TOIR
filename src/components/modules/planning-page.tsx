@@ -366,6 +366,7 @@ export default function PlanningPage() {
                   value={createForm.intervalDays}
                   onChange={(e) => setCreateForm({ ...createForm, intervalDays: e.target.value })}
                   placeholder="Например: 90 (квартальный), 365 (годовой)"
+                  className="w-auto"
                 />
               </div>
               <div className="space-y-2">

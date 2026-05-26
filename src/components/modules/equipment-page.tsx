@@ -1796,7 +1796,7 @@ export default function EquipmentPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="eq-code">Инв. номер *</Label>
-                    <Input id="eq-code" value={form.code} onChange={(e) => updateField('code', e.target.value)} placeholder="Н-201" />
+                    <Input id="eq-code" value={form.code} onChange={(e) => updateField('code', e.target.value)} placeholder="Н-201" className="w-auto" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1827,21 +1827,21 @@ export default function EquipmentPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="eq-manufacturer">Производитель</Label>
-                    <Input id="eq-manufacturer" value={form.manufacturer} onChange={(e) => updateField('manufacturer', e.target.value)} placeholder="ГМС Насосы" />
+                    <Input id="eq-manufacturer" value={form.manufacturer} onChange={(e) => updateField('manufacturer', e.target.value)} placeholder="ГМС Насосы" className="w-auto" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="eq-model">Модель</Label>
-                    <Input id="eq-model" value={form.model} onChange={(e) => updateField('model', e.target.value)} placeholder="ЦН-200/300" />
+                    <Input id="eq-model" value={form.model} onChange={(e) => updateField('model', e.target.value)} placeholder="ЦН-200/300" className="w-auto" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="eq-location">Расположение</Label>
-                    <Input id="eq-location" value={form.location} onChange={(e) => updateField('location', e.target.value)} placeholder="Цех №1, пом. А" />
+                    <Input id="eq-location" value={form.location} onChange={(e) => updateField('location', e.target.value)} placeholder="Цех №1, пом. А" className="w-auto" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="eq-serial">Заводской номер</Label>
-                    <Input id="eq-serial" value={form.serialNumber} onChange={(e) => updateField('serialNumber', e.target.value)} placeholder="SN-2019-00451" />
+                    <Input id="eq-serial" value={form.serialNumber} onChange={(e) => updateField('serialNumber', e.target.value)} placeholder="SN-2019-00451" className="w-auto" />
                   </div>
                 </div>
                 <div className="space-y-2">

@@ -561,17 +561,17 @@ function EditParamDialog({
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Референсное (номинальное) значение</Label>
-            <Input type="number" value={refValue} onChange={(e) => setRefValue(e.target.value)} placeholder="Например: 0.6, 80, 1200..." className="h-9 text-sm" step="any" />
+            <Input type="number" value={refValue} onChange={(e) => setRefValue(e.target.value)} placeholder="Например: 0.6, 80, 1200..." className="w-auto h-9 text-sm" step="any" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Допуск отклонения (%) нижний</Label>
-              <Input type="number" value={tolMin} onChange={(e) => setTolMin(e.target.value)} placeholder="Например: -3" className="h-9 text-sm" step="any" />
+              <Input type="number" value={tolMin} onChange={(e) => setTolMin(e.target.value)} placeholder="Например: -3" className="w-auto h-9 text-sm" step="any" />
               <p className="text-[10px] text-muted-foreground/70">Отрицательное значение = минус %</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Допуск отклонения (%) верхний</Label>
-              <Input type="number" value={tolMax} onChange={(e) => setTolMax(e.target.value)} placeholder="Например: 2" className="h-9 text-sm" step="any" />
+              <Input type="number" value={tolMax} onChange={(e) => setTolMax(e.target.value)} placeholder="Например: 2" className="w-auto h-9 text-sm" step="any" />
               <p className="text-[10px] text-muted-foreground/70">Положительное значение = плюс %</p>
             </div>
           </div>
@@ -641,20 +641,20 @@ function AddRecordDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Дата замера *</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9 text-sm" />
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto h-9 text-sm" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Замеренное значение *</Label>
-              <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Значение" className="h-9 text-sm" autoFocus />
+              <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Значение" className="w-auto h-9 text-sm" autoFocus />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">ФИО (кто внёс запись)</Label>
-            <Input value={performer} onChange={(e) => setPerformer(e.target.value)} placeholder="Иванов И.И." className="h-9 text-sm" />
+            <Input value={performer} onChange={(e) => setPerformer(e.target.value)} placeholder="Иванов И.И." className="w-auto h-9 text-sm" />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Примечание</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Дополнительные сведения..." className="h-9 text-sm" />
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Дополнительные сведения..." className="w-auto h-9 text-sm" />
           </div>
         </div>
         <AlertDialogFooter>
