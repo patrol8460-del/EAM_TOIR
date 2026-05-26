@@ -2478,17 +2478,17 @@ function CreateZipRequestDialog({
           )}
 
           {/* Navigation */}
-          <DialogFooter className="mt-6 gap-2 border-t pt-4 flex-col sm:flex-col">
-            <div className="flex w-full gap-2">
+          <DialogFooter className="mt-6 gap-2 border-t pt-4 flex-col sm:flex-row sm:justify-end">
+            <div className="flex w-full gap-2 sm:w-auto">
               {step > 1 && (
-                <Button variant="outline" onClick={prevStep} className="flex-1">
+                <Button variant="outline" onClick={prevStep} className="h-auto px-3 py-1 text-sm">
                   Назад
                 </Button>
               )}
               {step < 4 ? (
-                <Button onClick={nextStep} className="flex-1 gap-1.5 bg-orange-600 hover:bg-orange-700">
+                <Button onClick={nextStep} className="h-auto gap-1 px-3 py-1 text-sm bg-orange-600 hover:bg-orange-700">
                   Далее
-                  <ArrowRight className="size-4" />
+                  <ArrowRight className="size-3.5" />
                 </Button>
               ) : step === 4 ? (
                 <>
@@ -2496,36 +2496,36 @@ function CreateZipRequestDialog({
                     onClick={() => submitRequest(false)}
                     disabled={submitting}
                     variant="outline"
-                    className="flex-1 gap-1.5"
+                    className="h-auto gap-1 px-3 py-1 text-sm"
                   >
                     {submitting ? (
-                      <Loader2 className="size-4 animate-spin" />
+                      <Loader2 className="size-3.5 animate-spin" />
                     ) : (
-                      <ClipboardCheck className="size-4" />
+                      <ClipboardCheck className="size-3.5" />
                     )}
                     Сохранить
                   </Button>
                   <Button
                     onClick={() => submitRequest(true)}
                     disabled={submitting}
-                    className="flex-1 gap-1.5 bg-orange-600 hover:bg-orange-700"
+                    className="h-auto gap-1 px-3 py-1 text-sm bg-orange-600 hover:bg-orange-700"
                   >
                     {submitting ? (
-                      <Loader2 className="size-4 animate-spin" />
+                      <Loader2 className="size-3.5 animate-spin" />
                     ) : (
-                      <Send className="size-4" />
+                      <Send className="size-3.5" />
                     )}
                     Отправить на согласование
                   </Button>
                 </>
               ) : (
-                <Button onClick={nextStep} className="flex-1 gap-1.5 bg-orange-600 hover:bg-orange-700">
+                <Button onClick={nextStep} className="h-auto gap-1 px-3 py-1 text-sm bg-orange-600 hover:bg-orange-700">
                   Далее
-                  <ArrowRight className="size-4" />
+                  <ArrowRight className="size-3.5" />
                 </Button>
               )}
             </div>
-            <Button variant="ghost" onClick={handleClose} className="w-full">
+            <Button variant="ghost" onClick={handleClose} className="h-auto px-3 py-1 text-sm">
               Отмена
             </Button>
           </DialogFooter>
