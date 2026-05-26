@@ -1,9 +1,11 @@
 'use client'
 
-import { Menu, Bell, ChevronRight } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Menu, Bell, ChevronRight, ClipboardList, XCircle, Edit, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,9 +27,76 @@ const breadcrumbMap: Record<ModuleKey, string> = {
   analytics: 'Аналитика',
 }
 
+interface PersonalTask {
+  id: string
+  type: 'approval' | 'request_draft' | 'request_rejected'
+  entityType: string
+  entityId: string
+  title: string
+  description: string
+  role: string
+  status: string
+  createdAt: string
+}
+
+interface PersonalSummary {
+  pendingApprovals: number
+  rejectedRequests: number
+  draftRequests: number
+}
+
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return 'Только что'
+  if (diffMins < 60) return `${diffMins} мин назад`
+  if (diffHours < 24) return `${diffHours} ч назад`
+  return `${diffDays} дн назад`
+}
+
 export function TopBar() {
-  const { activeModule, sidebarCollapsed, toggleSidebar } = useAppStore()
+  const { activeModule, sidebarCollapsed, toggleSidebar, setActiveModule } = useAppStore()
   const { user, logout } = useAuthStore()
+  const [tasks, setTasks] = useState<PersonalTask[]>([])
+  const [summary, setSummary] = useState<PersonalSummary | null>(null)
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [bellOpen, setBellOpen] = useState(false)
+  const fetchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const totalTasks = summary
+    ? summary.pendingApprovals + summary.rejectedRequests + summary.draftRequests
+    : 0
+
+  const fetchNotifications = useCallback(async () => {
+    if (!user?.id) return
+    setNotificationsLoading(true)
+    try {
+      const res = await fetch('/api/dashboard/personal')
+      if (res.ok) {
+        const data = await res.json()
+        setTasks(data.tasks || [])
+        setSummary(data.summary || null)
+      }
+    } catch {
+      // silent
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }, [user?.id])
+
+  // Fetch notifications on mount and every 30 seconds
+  useEffect(() => {
+    fetchNotifications()
+    fetchIntervalRef.current = setInterval(fetchNotifications, 30000)
+    return () => {
+      if (fetchIntervalRef.current) clearInterval(fetchIntervalRef.current)
+    }
+  }, [fetchNotifications])
 
   const breadcrumb = breadcrumbMap[activeModule]
 
@@ -51,6 +120,13 @@ export function TopBar() {
       default:
         return role
     }
+  }
+
+  const handleTaskClick = (task: PersonalTask) => {
+    if (task.entityType === 'zip-request') {
+      setActiveModule('spare-parts')
+    }
+    setBellOpen(false)
   }
 
   return (
@@ -77,8 +153,8 @@ export function TopBar() {
 
       {/* Right side */}
       <div className="ml-auto flex items-center gap-2">
-        {/* Notifications */}
-        <DropdownMenu>
+        {/* Notifications Bell */}
+        <DropdownMenu open={bellOpen} onOpenChange={setBellOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
@@ -86,34 +162,78 @@ export function TopBar() {
               className="relative size-8 text-gray-500 hover:text-gray-700"
             >
               <Bell className="size-4" />
-              <span className="absolute right-1 top-1 flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF9900] opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-[#FF9900]" />
-              </span>
+              {totalTasks > 0 && (
+                <span className="absolute right-1 top-1 flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF9900] opacity-75" />
+                  <span className="relative inline-flex size-2 rounded-full bg-[#FF9900]" />
+                </span>
+              )}
               <span className="sr-only">Уведомления</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
-            <DropdownMenuLabel>Уведомления</DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-80 max-h-[420px] overflow-hidden flex flex-col">
+            <DropdownMenuLabel className="flex items-center justify-between">
+              <span className="text-sm font-semibold">Уведомления</span>
+              {totalTasks > 0 && (
+                <Badge className="bg-[#FF9900]/15 text-[#FF9900] border-0 text-[10px] font-semibold px-1.5 py-0">
+                  {totalTasks}
+                </Badge>
+              )}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="text-sm font-medium">Новая заявка</span>
-              <span className="text-xs text-muted-foreground">
-                Создана заявка на ремонт насоса #452
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="text-sm font-medium">ППР просрочен</span>
-              <span className="text-xs text-muted-foreground">
-                Плановое ТО компрессора К-12 просрочено на 3 дня
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="text-sm font-medium">Запчасть получена</span>
-              <span className="text-xs text-muted-foreground">
-                Поступил заказ на подшипники SKF-6205
-              </span>
-            </DropdownMenuItem>
+
+            {notificationsLoading ? (
+              <div className="p-2 space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg p-2">
+                    <Skeleton className="size-8 rounded-lg" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3.5 w-40" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : tasks.length === 0 ? (
+              <div className="py-8 text-center">
+                <Bell className="size-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Нет новых задач</p>
+              </div>
+            ) : (
+              <div className="overflow-y-auto max-h-[340px]">
+                {tasks.slice(0, 10).map((task) => (
+                  <DropdownMenuItem
+                    key={task.id}
+                    className="flex items-center gap-3 py-2.5 px-2 cursor-pointer focus:bg-orange-50"
+                    onClick={() => handleTaskClick(task)}
+                  >
+                    <div className={`flex size-8 items-center justify-center rounded-lg shrink-0 ${
+                      task.type === 'approval' ? 'bg-amber-100' :
+                      task.type === 'request_rejected' ? 'bg-red-100' : 'bg-slate-100'
+                    }`}>
+                      {task.type === 'approval' && <ClipboardList className="size-4 text-amber-600" />}
+                      {task.type === 'request_rejected' && <XCircle className="size-4 text-red-600" />}
+                      {task.type === 'request_draft' && <Edit className="size-4 text-slate-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate leading-tight">{task.title}</p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>
+                    </div>
+                    <div className="flex flex-col items-end shrink-0 gap-0.5">
+                      <p className="text-[10px] text-muted-foreground leading-tight">{formatTimeAgo(task.createdAt)}</p>
+                      <ArrowRight className="size-3 text-muted-foreground/40" />
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+                {tasks.length > 10 && (
+                  <div className="border-t px-2 py-2 text-center">
+                    <p className="text-xs text-muted-foreground">
+                      и ещё {tasks.length - 10} задач...
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

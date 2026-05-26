@@ -180,3 +180,30 @@ Stage Summary:
 - Backup archive created at /tmp/cs-toro-backup-20260525-194900.tar.gz (33 MB)
 - Deploy script created at /home/z/my-project/deploy.py for future deployments
 - Test credentials: admin@enterprise.ru/admin123, manager@enterprise.ru/admin123, engineer@enterprise.ru/admin123, worker@enterprise.ru/admin123
+
+---
+Task ID: 1
+Agent: Main
+Task: Fix bell notifications and approval workflow restrictions
+
+Work Log:
+- Replaced hardcoded bell icon notifications in top-bar.tsx with dynamic data from /api/dashboard/personal
+- Bell dropdown now shows real tasks: pending approvals (amber), rejected requests (red), drafts (gray)
+- Added blinking orange dot on bell icon only when there are active tasks (totalTasks > 0)
+- Notifications auto-refresh every 30 seconds
+- Clicking a task navigates to the appropriate module (spare-parts for ZIP requests)
+- Fixed rejected request info message in detail dialog: now only shows "Вы можете отредактировать..." to the author
+- Fixed edit button condition: removed 'cancelled' from editable statuses (only draft/rejected can be edited, not cancelled)
+- Added currentStepOrder field to ZipRequest interface
+- Updated ApprovalTimeline to accept currentStepOrder prop and correctly identify current pending step
+- Updated canApprove logic to match currentStepOrder + user role (not just any pending action)
+- Verified backend API restrictions: PUT and DELETE endpoints already check requestedBy === user.id
+- Tested full approval workflow: create → engineer approves → manager sees notification → manager rejects → author sees rejected notification
+- Tested edit/delete restrictions: non-author gets 403, author can edit/delete
+
+Stage Summary:
+- Bell icon now shows real-time notifications with blinking orange dot
+- Each approver only sees tasks for their specific approval step
+- Rejected requests return to applicant with notification
+- Only the original author can edit (draft/rejected) or delete (draft/cancelled/rejected) their requests
+- Non-authors see "Просмотр" only in the dropdown menu

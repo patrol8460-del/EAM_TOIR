@@ -206,6 +206,7 @@ interface ZipRequest {
   equipmentName: string | null
   authorId: string
   authorName: string
+  currentStepOrder: number
   createdAt: string
   updatedAt: string
   items: ZipRequestItem[]
@@ -970,6 +971,7 @@ function ApprovalTimeline({
   canAct,
   userRole,
   loading,
+  currentStepOrder,
 }: {
   actions: ApprovalAction[]
   onApprove: (comment: string) => void
@@ -977,9 +979,13 @@ function ApprovalTimeline({
   canAct: boolean
   userRole: string
   loading: boolean
+  currentStepOrder?: number
 }) {
   const [comment, setComment] = useState('')
-  const pendingAction = actions.find((a) => a.action === 'pending')
+  // Find the pending action that matches the current step
+  const currentPendingAction = actions.find(
+    (a) => a.action === 'pending' && a.stepOrder === currentStepOrder,
+  )
 
   const handleApprove = () => {
     onApprove(comment)
@@ -995,7 +1001,7 @@ function ApprovalTimeline({
     <div className="space-y-0">
       {actions.map((action, idx) => {
         const isPending = action.action === 'pending'
-        const isCurrentStep = pendingAction?.stepId === action.stepId
+        const isCurrentStep = currentPendingAction?.stepId === action.stepId
         const canUserAct = canAct && isCurrentStep && userRole === action.role
 
         return (
@@ -1258,11 +1264,14 @@ function ZipRequestDetailDialog({
     }
   }
 
-  const pendingAction = request?.approvalActions?.find((a) => a.action === 'pending')
+  // Find the pending action that matches the current step
+  const currentPendingAction = request?.approvalActions?.find(
+    (a) => a.action === 'pending' && a.stepOrder === request?.currentStepOrder,
+  )
   const canApprove =
     !!user &&
-    !!pendingAction &&
-    user.role === pendingAction.role &&
+    !!currentPendingAction &&
+    user.role === currentPendingAction.role &&
     request?.status === 'pending_approval'
 
   const totalCost = request?.items?.reduce(
@@ -1289,7 +1298,7 @@ function ZipRequestDetailDialog({
                   {PRIORITY_LABELS[request.priority]}
                 </Badge>
               </SheetDescription>
-              {request.status === 'rejected' && (
+              {request.status === 'rejected' && user?.id === request.authorId && (
                 <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
                   <p className="font-medium text-red-700">Заявка отклонена</p>
                   <p className="text-red-600 mt-1">Вы можете отредактировать заявку и повторно отправить на согласование, либо удалить её.</p>
@@ -1517,6 +1526,7 @@ function ZipRequestDetailDialog({
                       canAct={canApprove}
                       userRole={user?.role || ''}
                       loading={actionLoading}
+                      currentStepOrder={request.currentStepOrder}
                     />
                   </div>
                 </>
@@ -2889,7 +2899,7 @@ function ZipRequestsTab() {
                             <DropdownMenuItem className="gap-2" onClick={() => openDetail(req.id)}>
                               <Eye className="size-4" /> Просмотр
                             </DropdownMenuItem>
-                            {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && user?.id === req.authorId && (
+                            {(req.status === 'draft' || req.status === 'rejected') && user?.id === req.authorId && (
                               <DropdownMenuItem className="gap-2" onClick={() => openEditDialog(req)}>
                                 <Pencil className="size-4" /> Редактировать
                               </DropdownMenuItem>
