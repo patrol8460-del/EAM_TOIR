@@ -1377,7 +1377,7 @@ function ZipRequestDetailDialog({
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent text-xs">
-                          <TableHead>ОЗМ</TableHead>
+                          {request.type !== 'manufacturing' && <TableHead>ОЗМ</TableHead>}
                           <TableHead>Наименование</TableHead>
                           <TableHead className="text-right">Кол-во</TableHead>
                           <TableHead>Ед.изм.</TableHead>
@@ -1388,9 +1388,11 @@ function ZipRequestDetailDialog({
                       <TableBody>
                         {request.items.map((item, idx) => (
                           <TableRow key={item.id || idx}>
+                            {request.type !== 'manufacturing' && (
                             <TableCell className="font-mono text-xs">
                               {item.articleNumber || '—'}
                             </TableCell>
+                            )}
                             <TableCell className="text-sm">{item.name}</TableCell>
                             <TableCell className="text-right text-sm">{item.quantity}</TableCell>
                             <TableCell className="text-sm">{item.unit || 'шт'}</TableCell>
@@ -2082,7 +2084,7 @@ function CreateZipRequestDialog({
                     <div>
                       <p className="font-medium text-sm">Изготовление запчасти</p>
                       <p className="text-xs text-muted-foreground">
-                        С привязкой к оборудованию, с чертежами и спецификацией
+                        Без привязки к оборудованию, с чертежами и спецификацией
                       </p>
                     </div>
                   </div>
@@ -2141,7 +2143,8 @@ function CreateZipRequestDialog({
                 </div>
               </div>
 
-              {/* Equipment selector (optional) */}
+              {/* Equipment selector (only for purchase) */}
+              {type !== 'manufacturing' && (
                 <div className="space-y-2">
                   <Label>Оборудование <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
                   {equipmentName ? (
@@ -2196,6 +2199,7 @@ function CreateZipRequestDialog({
                     </div>
                   )}
                 </div>
+              )}
 
               {/* Applicant */}
               <div className="space-y-2">
@@ -2241,7 +2245,7 @@ function CreateZipRequestDialog({
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent text-xs">
-                      <TableHead className="min-w-[130px]">ОЗМ</TableHead>
+                      {!isManufacturing && <TableHead className="min-w-[130px]">ОЗМ</TableHead>}
                       <TableHead className="min-w-[180px]">Наименование *</TableHead>
                       <TableHead className="w-[80px] text-right">Кол-во</TableHead>
                       <TableHead className="w-[100px] text-right">Цена, ₽</TableHead>
@@ -2258,6 +2262,7 @@ function CreateZipRequestDialog({
                   <TableBody>
                     {items.map((item, idx) => (
                       <TableRow key={idx}>
+                        {!isManufacturing && (
                         <TableCell>
                           <div className="relative">
                             <Input
@@ -2307,6 +2312,7 @@ function CreateZipRequestDialog({
                             )}
                           </div>
                         </TableCell>
+                        )}
                         <TableCell>
                           <Input
                             value={item.name}
