@@ -252,3 +252,28 @@ Stage Summary:
 - File download works via dedicated API endpoint with proper Content-Disposition headers
 - Dashboard now loads personal tasks correctly (pending approvals, rejected requests, drafts)
 - All changes deployed in production build with auto-restart watchdog
+
+---
+Task ID: 4
+Agent: Main
+Task: Изменить сценарий "Изготовление ЗИП" — убрать ОЗМ и оборудование
+
+Work Log:
+- Step 2 (Основная информация): скрыл блок "Оборудование" для type === 'manufacturing'
+- Step 3 (Позиции): скрыл колонку "ОЗМ" в таблице ввода для manufacturing
+- Просмотр заявки (Detail): скрыл колонку "ОЗМ" для manufacturing-заявок
+- Обновил описание типа: "Без привязки к оборудованию, с чертежами и спецификацией"
+- Валидация: ОЗМ не требуется для manufacturing (только наименование)
+
+Stage Summary:
+- При создании заявки "Изготовление" не отображаются поля ОЗМ и Оборудование
+- Чертеж, материал, спецификация остаются доступными
+- Lint clean (только предсуществующие ошибки в утилитарных файлах)
+- Dev server запускается корректно
+
+TODO (when sandbox stabilizes):
+- Проверить в UI: создание manufacturing-заявки без ОЗМ и оборудования
+- Потестировать полный сценарий: создание → согласование → выполнение
+- Файлы: проверить загрузку и скачивание
+- Дашборд: проверить отображение личных задач
+- Колокольчик: проверить переход к конкретной задаче
