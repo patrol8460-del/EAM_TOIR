@@ -106,12 +106,12 @@ export async function POST(
       )
     }
 
-    // Verify user's role matches the step's required role
+    // Verify user's role matches the step's required role exactly
     const requiredRole = currentAction.approvalStep.role
-    if (user.role !== requiredRole && user.role !== 'admin') {
+    if (user.role !== requiredRole) {
       return NextResponse.json(
         {
-          error: `Для этого шага требуется роль "${requiredRole}" или admin`,
+          error: `Для этого шага требуется роль "${requiredRole}". У вас роль "${user.role}".`,
         },
         { status: 403 },
       )

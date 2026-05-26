@@ -1262,7 +1262,7 @@ function ZipRequestDetailDialog({
   const canApprove =
     !!user &&
     !!pendingAction &&
-    (user.role === pendingAction.role || user.role === 'admin') &&
+    user.role === pendingAction.role &&
     request?.status === 'pending_approval'
 
   const totalCost = request?.items?.reduce(
@@ -1485,7 +1485,7 @@ function ZipRequestDetailDialog({
                           <Button variant="ghost" size="icon" className="size-7">
                             <Download className="size-3.5" />
                           </Button>
-                          {(request.status === 'draft' || request.status === 'rejected' || user?.role === 'admin') && (
+                          {(request.status === 'draft' || request.status === 'rejected') && user?.id === request.authorId && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -2889,12 +2889,12 @@ function ZipRequestsTab() {
                             <DropdownMenuItem className="gap-2" onClick={() => openDetail(req.id)}>
                               <Eye className="size-4" /> Просмотр
                             </DropdownMenuItem>
-                            {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && (
+                            {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && user?.id === req.authorId && (
                               <DropdownMenuItem className="gap-2" onClick={() => openEditDialog(req)}>
                                 <Pencil className="size-4" /> Редактировать
                               </DropdownMenuItem>
                             )}
-                            {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected' || user?.role === 'admin') && (
+                            {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && user?.id === req.authorId && (
                               <DropdownMenuItem
                                 className="gap-2 text-destructive"
                                 onClick={() => openDeleteDialog(req)}

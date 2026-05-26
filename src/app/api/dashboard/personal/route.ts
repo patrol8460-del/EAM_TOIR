@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
         (a) => a.approvalStep.stepOrder === req.currentStepOrder && a.status === 'pending',
       )
       if (!currentPending) continue
-      if (user.role !== currentPending.approvalStep.role && user.role !== 'admin') continue
+      // Only the user whose role matches the step's required role sees the task
+      if (user.role !== currentPending.approvalStep.role) continue
 
       tasks.push({
         id: req.id,

@@ -155,10 +155,10 @@ export async function PUT(
       )
     }
 
-    // Only author or admin can edit
-    if (existing.requestedBy !== user.id && user.role !== 'admin') {
+    // Only the original author can edit (no admin override for drafts/rejected)
+    if (existing.requestedBy !== user.id) {
       return NextResponse.json(
-        { error: 'Нет прав для редактирования' },
+        { error: 'Только автор заявки может её редактировать' },
         { status: 403 },
       )
     }
@@ -383,10 +383,10 @@ export async function DELETE(
       )
     }
 
-    // Permission check: only admin or author
-    if (existing.requestedBy !== user.id && user.role !== 'admin') {
+    // Permission check: only the original author can delete their own requests
+    if (existing.requestedBy !== user.id) {
       return NextResponse.json(
-        { error: 'Нет прав для удаления' },
+        { error: 'Только автор заявки может её удалить' },
         { status: 403 },
       )
     }
