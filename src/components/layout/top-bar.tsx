@@ -76,7 +76,7 @@ export function TopBar() {
     if (!user?.id) return
     setNotificationsLoading(true)
     try {
-      const res = await fetch('/api/dashboard/personal')
+      const res = await fetch('/api/dashboard/personal', { credentials: 'include' })
       if (res.ok) {
         const data = await res.json()
         setTasks(data.tasks || [])
