@@ -3579,7 +3579,17 @@ function ApprovalRoutesTab() {
 
 export default function SparePartsPage() {
   const { user } = useAuthStore()
+  const { pendingTask, setPendingTask } = useAppStore()
   const isAdmin = user?.role === 'admin'
+
+  // When a pending task comes from the bell notification, switch to requests tab
+  const [activeTab, setActiveTab] = useState('catalog')
+
+  useEffect(() => {
+    if (pendingTask) {
+      setActiveTab('requests')
+    }
+  }, [pendingTask])
 
   return (
     <div className="space-y-6">
@@ -3592,7 +3602,7 @@ export default function SparePartsPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="catalog">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="catalog" className="gap-1.5">
             <Package className="size-4" />
