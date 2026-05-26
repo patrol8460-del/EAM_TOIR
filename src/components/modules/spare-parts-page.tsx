@@ -2481,12 +2481,12 @@ function CreateZipRequestDialog({
           <DialogFooter className="mt-6 gap-2 border-t pt-4 flex-col sm:flex-row sm:justify-end">
             <div className="flex w-full gap-2 sm:w-auto">
               {step > 1 && (
-                <Button variant="outline" size="sm" onClick={prevStep} className="h-auto py-0.5 px-2.5 text-xs">
+                <Button variant="outline" size="sm" onClick={prevStep} className="h-auto py-0.5 px-2.5">
                   Назад
                 </Button>
               )}
               {step < 4 ? (
-                <Button size="sm" onClick={nextStep} className="h-auto py-0.5 px-2.5 gap-1 text-xs bg-orange-600 hover:bg-orange-700">
+                <Button size="sm" onClick={nextStep} className="h-auto py-0.5 px-2.5 gap-1 bg-orange-600 hover:bg-orange-700">
                   Далее
                   <ArrowRight className="size-3" />
                 </Button>
@@ -2497,7 +2497,7 @@ function CreateZipRequestDialog({
                     onClick={() => submitRequest(false)}
                     disabled={submitting}
                     variant="outline"
-                    className="h-auto py-0.5 px-2.5 gap-1 text-xs"
+                    className="h-auto py-0.5 px-2.5 gap-1"
                   >
                     {submitting ? (
                       <Loader2 className="size-3 animate-spin" />
@@ -2510,7 +2510,7 @@ function CreateZipRequestDialog({
                     size="sm"
                     onClick={() => submitRequest(true)}
                     disabled={submitting}
-                    className="h-auto py-0.5 px-2.5 gap-1 text-xs bg-orange-600 hover:bg-orange-700"
+                    className="h-auto py-0.5 px-2.5 gap-1 bg-orange-600 hover:bg-orange-700"
                   >
                     {submitting ? (
                       <Loader2 className="size-3 animate-spin" />
@@ -2521,13 +2521,13 @@ function CreateZipRequestDialog({
                   </Button>
                 </>
               ) : (
-                <Button size="sm" onClick={nextStep} className="h-auto py-0.5 px-2.5 gap-1 text-xs bg-orange-600 hover:bg-orange-700">
+                <Button size="sm" onClick={nextStep} className="h-auto py-0.5 px-2.5 gap-1 bg-orange-600 hover:bg-orange-700">
                   Далее
                   <ArrowRight className="size-3" />
                 </Button>
               )}
             </div>
-            <Button variant="ghost" size="sm" onClick={handleClose} className="h-auto py-0.5 px-2.5 text-xs">
+            <Button variant="ghost" size="sm" onClick={handleClose} className="h-auto py-0.5 px-2.5">
               Отмена
             </Button>
           </DialogFooter>
