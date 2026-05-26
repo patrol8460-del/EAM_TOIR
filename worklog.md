@@ -207,3 +207,26 @@ Stage Summary:
 - Rejected requests return to applicant with notification
 - Only the original author can edit (draft/rejected) or delete (draft/cancelled/rejected) their requests
 - Non-authors see "Просмотр" only in the dropdown menu
+
+---
+Task ID: 2
+Agent: Main
+Task: Fix bell notifications — credentials, tab switching, deep linking to requests
+
+Work Log:
+- Fixed top-bar.tsx: added `credentials: 'include'` to fetch('/api/dashboard/personal') — this was the root cause of empty bell (API returned 401 without cookies)
+- Added PendingTaskAction interface to app-store.ts with requestId and mode ('detail' | 'edit')
+- Updated TopBar handleTaskClick: for approval tasks sets mode='detail', for rejected/draft sets mode='edit'
+- Added pendingTask listener in ZipRequestsTab: useEffect watches store and opens detail or edit dialog accordingly
+- Fixed SparePartsPage: changed Tabs from defaultValue to controlled value, added useEffect to auto-switch to "requests" tab when pendingTask arrives
+- Multiple production rebuilds via .zscripts/dev.sh (rm -rf .next && npx next build + copy static)
+
+Stage Summary:
+- Bell notifications now work: fetches real data from /api/dashboard/personal with auth cookies
+- Blinking orange dot appears only when tasks exist
+- Clicking notification opens the specific request:
+  - Approval tasks → detail dialog with approve/reject buttons
+  - Rejected tasks → edit dialog for correction and resubmission
+  - Draft tasks → edit dialog for completion
+- Auto-switches to "Потребности" tab when coming from bell
+- All pre-existing stub texts removed from build
