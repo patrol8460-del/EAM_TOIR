@@ -2081,6 +2081,7 @@ function CreateZipRequestDialog({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Например: Закупка подшипников для насоса"
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
@@ -2091,13 +2092,14 @@ function CreateZipRequestDialog({
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Дополнительные сведения о потребности..."
                   rows={3}
+                  className="w-full"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-wrap gap-4">
                 <div className="space-y-2">
                   <Label>Приоритет</Label>
                   <Select value={priority} onValueChange={(v) => setPriority(v as PriorityType)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-auto min-w-[200px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2114,6 +2116,7 @@ function CreateZipRequestDialog({
                     type="date"
                     value={neededBy}
                     onChange={(e) => setNeededBy(e.target.value)}
+                    className="w-auto min-w-[160px]"
                   />
                 </div>
               </div>
@@ -2122,12 +2125,12 @@ function CreateZipRequestDialog({
                 <div className="space-y-2">
                   <Label>Оборудование <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
                   {equipmentName ? (
-                    <div className="flex items-center gap-2 rounded-lg border px-3 py-2">
-                      <span className="flex-1 text-sm">{equipmentName}</span>
+                    <div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 max-w-full">
+                      <span className="text-sm truncate max-w-[400px]">{equipmentName}</span>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-7"
+                        className="size-7 shrink-0"
                         onClick={() => {
                           setEquipmentId('')
                           setEquipmentName('')
@@ -2137,13 +2140,13 @@ function CreateZipRequestDialog({
                       </Button>
                     </div>
                   ) : (
-                    <div className="relative">
+                    <div className="relative w-auto">
                       <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         placeholder="Поиск оборудования по названию или коду..."
                         value={equipSearch}
                         onChange={(e) => setEquipSearch(e.target.value)}
-                        className="pl-9"
+                        className="pl-9 w-auto min-w-[280px]"
                       />
                       {equipLoading && (
                         <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
@@ -2188,7 +2191,7 @@ function CreateZipRequestDialog({
                     }
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-auto min-w-[220px]">
                     <SelectValue placeholder="Выберите подразделение" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2205,6 +2208,7 @@ function CreateZipRequestDialog({
                   value={applicantName}
                   onChange={(e) => setApplicantName(e.target.value)}
                   placeholder="ФИО заявителя"
+                  className="w-auto min-w-[200px]"
                 />
               </div>
             </div>
