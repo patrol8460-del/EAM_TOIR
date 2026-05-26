@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useAppStore, type ModuleKey } from '@/store/app-store'
+import { useAppStore, type ModuleKey, type PendingTaskAction } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
 
 const breadcrumbMap: Record<ModuleKey, string> = {
@@ -60,7 +60,7 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 export function TopBar() {
-  const { activeModule, sidebarCollapsed, toggleSidebar, setActiveModule } = useAppStore()
+  const { activeModule, sidebarCollapsed, toggleSidebar, setActiveModule, setPendingTask } = useAppStore()
   const { user, logout } = useAuthStore()
   const [tasks, setTasks] = useState<PersonalTask[]>([])
   const [summary, setSummary] = useState<PersonalSummary | null>(null)
@@ -124,6 +124,9 @@ export function TopBar() {
 
   const handleTaskClick = (task: PersonalTask) => {
     if (task.entityType === 'zip-request') {
+      // For rejected/draft tasks — open in edit mode; for approvals — open in detail mode
+      const mode: PendingTaskAction['mode'] = task.type === 'approval' ? 'detail' : 'edit'
+      setPendingTask({ requestId: task.entityId, mode })
       setActiveModule('spare-parts')
     }
     setBellOpen(false)

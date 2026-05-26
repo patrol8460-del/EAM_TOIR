@@ -98,6 +98,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth-store'
+import { useAppStore } from '@/store/app-store'
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -2579,6 +2580,40 @@ function ZipRequestsTab() {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
 
   const { user } = useAuthStore()
+  const { pendingTask, setPendingTask } = useAppStore()
+
+  // Watch for pending task from bell notification — open detail or edit dialog
+  useEffect(() => {
+    if (!pendingTask) return
+    const { requestId, mode } = pendingTask
+    // Clear the pending task immediately to avoid re-triggering
+    setPendingTask(null)
+
+    if (mode === 'detail') {
+      // Open detail dialog (for approval tasks)
+      setDetailId(requestId)
+      setDetailOpen(true)
+    } else if (mode === 'edit') {
+      // Open edit dialog (for rejected/draft tasks) — need to fetch the request first
+      ;(async () => {
+        try {
+          const res = await fetch(`/api/zip-requests/${requestId}`, { credentials: 'include' })
+          if (res.ok) {
+            const req = await res.json()
+            setEditRequest(req)
+            setEditOpen(true)
+          } else {
+            toast.error('Не удалось загрузить заявку')
+            // Fallback to detail view
+            setDetailId(requestId)
+            setDetailOpen(true)
+          }
+        } catch {
+          toast.error('Ошибка сети')
+        }
+      })()
+    }
+  }, [pendingTask, setPendingTask])
 
   const fetchRequests = useCallback(async () => {
     setLoading(true)
