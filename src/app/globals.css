@@ -146,6 +146,15 @@
   scrollbar-width: thin;
   scrollbar-color: oklch(0.7 0 0 / 30%) transparent;
 }
-.dark .custom-scrollbar {
-  scrollbar-color: oklch(0.4 0 0 / 50%) transparent;
+/* Inputs inside table cells should fill the cell */
+td input[type="text"],
+td input[type="number"],
+td input[type="date"],
+td input:not([type]) {
+  width: 100%;
+}
+
+/* Textareas inside table cells should fill the cell */
+td textarea {
+  width: 100%;
 }

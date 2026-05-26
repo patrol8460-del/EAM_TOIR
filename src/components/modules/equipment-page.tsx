@@ -1792,7 +1792,7 @@ export default function EquipmentPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="eq-name">Наименование *</Label>
-                    <Input id="eq-name" value={form.name} onChange={(e) => updateField('name', e.target.value)} placeholder="Насос центробежный" />
+                    <Input id="eq-name" value={form.name} onChange={(e) => updateField('name', e.target.value)} placeholder="Насос центробежный" className="w-full" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="eq-code">Инв. номер *</Label>

@@ -429,7 +429,7 @@ export default function RequestsPage() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="req-title">Название заявки *</Label>
-                <Input id="req-title" value={form.title} onChange={(e) => updateField('title', e.target.value)} placeholder="Утечка через сальник насоса Н-205" />
+                <Input id="req-title" value={form.title} onChange={(e) => updateField('title', e.target.value)} placeholder="Утечка через сальник насоса Н-205" className="w-full" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -735,7 +735,7 @@ export default function RequestsPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="edit-title">Название заявки *</Label>
-              <Input id="edit-title" value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} />
+              <Input id="edit-title" value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} className="w-full" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

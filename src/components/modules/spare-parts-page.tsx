@@ -591,6 +591,7 @@ function CatalogTab() {
                       value={form.name}
                       onChange={(e) => updateField('name', e.target.value)}
                       placeholder="Подшипник 6308-2RS"
+                      className="w-full"
                     />
                   </div>
                   <div className="space-y-2">
@@ -828,6 +829,7 @@ function CatalogTab() {
                   id="edit-sp-name"
                   value={editForm.name}
                   onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
@@ -2146,7 +2148,7 @@ function CreateZipRequestDialog({
                         placeholder="Поиск оборудования по названию или коду..."
                         value={equipSearch}
                         onChange={(e) => setEquipSearch(e.target.value)}
-                        className="pl-9 w-auto min-w-[280px]"
+                        className="w-full pl-9"
                       />
                       {equipLoading && (
                         <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
@@ -3149,6 +3151,7 @@ function ApprovalRouteDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Основной маршрут"
+                className="w-full"
               />
             </div>
             <div className="space-y-2">

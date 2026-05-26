@@ -275,7 +275,7 @@ function OkeiCombobox({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Поиск по коду, названию, символу..."
-              className="h-8 text-xs pl-8"
+              className="w-full h-8 text-xs pl-8"
               autoFocus
             />
           </div>
@@ -553,7 +553,7 @@ function EditParamDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Название параметра *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Например: Давление, Температура, Вибрация..." className="h-9 text-sm" autoFocus />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Например: Давление, Температура, Вибрация..." className="w-full h-9 text-sm" autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Единица измерения (справочник ОКЕИ)</Label>

@@ -587,6 +587,7 @@ export default function PersonnelPage() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 disabled={submitting}
+                className="w-full"
               />
             </div>
 

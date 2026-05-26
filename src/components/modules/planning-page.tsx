@@ -354,6 +354,7 @@ export default function PlanningPage() {
                   value={createForm.planName}
                   onChange={(e) => setCreateForm({ ...createForm, planName: e.target.value })}
                   placeholder="Автогенерация при выборе оборудования"
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
