@@ -296,3 +296,19 @@ Stage Summary:
 - Dialog width reduced to 680px for more compact, balanced layout
 - All step containers use max-w-2xl for consistent field sizing
 - Server running on port 3000 with new build
+---
+Task ID: 2
+Agent: Main
+Task: Fix drag-and-drop file upload and "Отправить на согласование" error
+
+Work Log:
+- Added drag-and-drop state (isDragOver) and handlers (onDragOver, onDragEnter, onDragLeave, onDrop)
+- Applied drag-and-drop handlers to both manufacturing step 3 and purchase step 4 file drop zones
+- Added visual feedback (orange border/background) when dragging files over drop zone
+- Fixed API validation in /api/zip-requests/route.ts: removed required articleNumber check for manufacturing items
+- Rebuilt project and restarted production server
+
+Stage Summary:
+- Drag-and-drop now works on file upload steps in both manufacturing and purchase scenarios
+- Manufacturing submit no longer throws "Каждая позиция должна содержать articleNumber" error
+- Server rebuilt and running on port 3000

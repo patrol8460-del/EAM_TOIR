@@ -1852,6 +1852,8 @@ function CreateZipRequestDialog({
     )
   }
 
+  const [isDragOver, setIsDragOver] = useState(false)
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files
     if (!selected) return
@@ -1862,6 +1864,44 @@ function CreateZipRequestDialog({
     setFiles((prev) => [...prev, ...newFiles])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
+
+  const addFiles = (fileList: FileList | File[]) => {
+    const newFiles = Array.from(fileList).map((file) => ({
+      file,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    }))
+    setFiles((prev) => [...prev, ...newFiles])
+  }
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(true)
+  }, [])
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only unset if leaving the drop zone entirely
+    if (e.currentTarget === e.target) {
+      setIsDragOver(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files)
+    }
+  }, [])
 
   const removeFile = (id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id))
@@ -2497,10 +2537,18 @@ function CreateZipRequestDialog({
           {step === 3 && isManufacturing && (
             <div className="space-y-4 max-w-2xl">
               <div
-                className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-orange-400 hover:bg-orange-50/30"
+                className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                  isDragOver
+                    ? 'border-orange-500 bg-orange-50'
+                    : 'border-muted hover:border-orange-400 hover:bg-orange-50/30'
+                }`}
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
-                <Upload className="size-8 text-muted-foreground" />
+                <Upload className={`size-8 ${isDragOver ? 'text-orange-500' : 'text-muted-foreground'}`} />
                 <div>
                   <p className="text-sm font-medium">Нажмите для выбора файлов</p>
                   <p className="text-xs text-muted-foreground">
@@ -2557,10 +2605,18 @@ function CreateZipRequestDialog({
           {step === 4 && !isManufacturing && (
             <div className="space-y-4 max-w-2xl">
               <div
-                className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-orange-400 hover:bg-orange-50/30"
+                className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                  isDragOver
+                    ? 'border-orange-500 bg-orange-50'
+                    : 'border-muted hover:border-orange-400 hover:bg-orange-50/30'
+                }`}
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
-                <Upload className="size-8 text-muted-foreground" />
+                <Upload className={`size-8 ${isDragOver ? 'text-orange-500' : 'text-muted-foreground'}`} />
                 <div>
                   <p className="text-sm font-medium">Нажмите для выбора файлов</p>
                   <p className="text-xs text-muted-foreground">

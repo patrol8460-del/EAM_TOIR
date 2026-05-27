@@ -279,9 +279,9 @@ export async function POST(request: NextRequest) {
       // Create items if provided
       if (items && items.length > 0) {
         for (const item of items) {
-          if (!item.articleNumber || !item.name || item.quantity == null) {
+          if (!item.name || item.quantity == null) {
             throw new Error(
-              'Каждая позиция должна содержать articleNumber, name и quantity',
+              'Каждая позиция должна содержать name и quantity',
             )
           }
 
