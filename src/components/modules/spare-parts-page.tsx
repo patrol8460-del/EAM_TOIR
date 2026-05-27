@@ -1781,6 +1781,32 @@ function CreateZipRequestDialog({
     setSpSearchQuery('')
   }
 
+  // On Enter in ОЗМ field — search catalog and auto-fill if exact code match
+  const handleArticleEnter = async (idx: number, code: string) => {
+    const trimmed = code.trim()
+    if (!trimmed) return
+    try {
+      const res = await fetch(`/api/spare-parts?search=${encodeURIComponent(trimmed)}&limit=10`)
+      if (!res.ok) return
+      const data = await res.json()
+      const results = data.items || []
+      // Try exact code match first (case-insensitive)
+      const exact = results.find(
+        (sp: SparePartItem) => sp.code.toLowerCase() === trimmed.toLowerCase()
+      )
+      if (exact) {
+        selectSparePart(idx, exact)
+        return
+      }
+      // If single result — auto-fill it
+      if (results.length === 1) {
+        selectSparePart(idx, results[0])
+      }
+    } catch {
+      // silent
+    }
+  }
+
   const pasteFromClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText()
@@ -2466,6 +2492,15 @@ function CreateZipRequestDialog({
                               onChange={(e) => {
                                 updateItem(idx, 'articleNumber', e.target.value)
                                 handleSpSearch(idx, e.target.value)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  setSpSearchIdx(null)
+                                  setSpSearchResults([])
+                                  setSpSearchQuery('')
+                                  handleArticleEnter(idx, item.articleNumber)
+                                }
                               }}
                               onFocus={() => handleSpSearch(idx, item.articleNumber)}
                               placeholder="ОЗМ"
