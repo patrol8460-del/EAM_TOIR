@@ -1690,19 +1690,22 @@ function CreateZipRequestDialog({
   const [spSearchQuery, setSpSearchQuery] = useState('')
   const [spSearchResults, setSpSearchResults] = useState<SparePartItem[]>([])
   const [spSearchLoading, setSpSearchLoading] = useState(false)
-  const spAnchorRef = useRef<HTMLDivElement>(null)
+  const spAnchorRefs = useRef<(HTMLDivElement | null)[]>([]) // per-row refs for dropdown positioning
   const spActiveIdxRef = useRef<number | null>(null) // persist active row index for portal clicks
   const [spDropdownPos, setSpDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
-  // Compute dropdown position from the anchor element
+  // Compute dropdown position from the anchor element of the active row
   useEffect(() => {
-    if (spSearchIdx !== null && spSearchResults.length > 0 && !spSearchLoading && spAnchorRef.current) {
-      const rect = spAnchorRef.current.getBoundingClientRect()
-      setSpDropdownPos({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: Math.max(rect.width, 280),
-      })
+    if (spSearchIdx !== null && spSearchResults.length > 0 && !spSearchLoading) {
+      const anchor = spAnchorRefs.current[spSearchIdx]
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect()
+        setSpDropdownPos({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: Math.max(rect.width, 280),
+        })
+      }
     } else {
       setSpDropdownPos(null)
     }
@@ -2173,6 +2176,7 @@ function CreateZipRequestDialog({
     : ['Тип заявки', 'Основная информация', 'Позиции', 'Файлы']
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px] lg:max-w-[92vw] xl:max-w-[1100px]">
         <DialogHeader>
@@ -2504,7 +2508,7 @@ function CreateZipRequestDialog({
                       <TableRow key={idx}>
                         {!isManufacturing && (
                         <TableCell>
-                          <div ref={spAnchorRef} className="relative">
+                          <div ref={(el) => { spAnchorRefs.current[idx] = el }} className="relative">
                             <Input
                               value={item.articleNumber}
                               onChange={(e) => {
@@ -2634,36 +2638,6 @@ function CreateZipRequestDialog({
                   </TableBody>
                 </Table>
               </div>
-              {/* Spare part search dropdown — rendered via portal to avoid table overflow clipping */}
-              {spDropdownPos && spSearchResults.length > 0 &&
-                createPortal(
-                  <div
-                    className="fixed z-[9999] max-h-48 overflow-y-auto rounded-lg border bg-popover shadow-lg"
-                    style={{ top: spDropdownPos.top, left: spDropdownPos.left, width: spDropdownPos.width }}
-                  >
-                    {spSearchResults.map((sp) => (
-                      <button
-                        key={sp.id}
-                        type="button"
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors"
-                        onMouseDown={(e) => {
-                          e.preventDefault() // prevent blur
-                          if (spActiveIdxRef.current !== null) {
-                            selectSparePart(spActiveIdxRef.current, sp)
-                          }
-                        }}
-                      >
-                        <span className="shrink-0 font-mono text-orange-600">{sp.code}</span>
-                        <span className="truncate">{sp.name}</span>
-                        {sp.currentStock > 0 && (
-                          <span className="ml-auto shrink-0 text-muted-foreground">ост: {sp.currentStock}</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>,
-                  document.body
-                )
-              }
               <Button variant="outline" size="sm" onClick={addItem} className="gap-1.5">
                 <Plus className="size-3.5" />
                 Добавить позицию
@@ -2909,6 +2883,37 @@ function CreateZipRequestDialog({
         </div>
       </DialogContent>
     </Dialog>
+    {/* Spare part search dropdown — portal to body, outside any overflow containers */}
+    {open && spDropdownPos && spSearchResults.length > 0 &&
+      createPortal(
+        <div
+          className="fixed z-[9999] max-h-48 overflow-y-auto rounded-lg border bg-popover shadow-lg"
+          style={{ top: spDropdownPos.top, left: spDropdownPos.left, width: spDropdownPos.width }}
+        >
+          {spSearchResults.map((sp) => (
+            <button
+              key={sp.id}
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                if (spActiveIdxRef.current !== null) {
+                  selectSparePart(spActiveIdxRef.current, sp)
+                }
+              }}
+            >
+              <span className="shrink-0 font-mono text-orange-600">{sp.code}</span>
+              <span className="truncate">{sp.name}</span>
+              {sp.currentStock > 0 && (
+                <span className="ml-auto shrink-0 text-muted-foreground">ост: {sp.currentStock}</span>
+              )}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )
+    }
+    </>
   )
 }
 
