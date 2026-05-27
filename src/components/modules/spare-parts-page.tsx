@@ -1595,6 +1595,7 @@ function CreateZipRequestDialog({
   const [applicantName, setApplicantName] = useState('')
   const [applicantDepartmentId, setApplicantDepartmentId] = useState('')
   const [applicantDepartmentName, setApplicantDepartmentName] = useState('')
+  const [mfgQuantity, setMfgQuantity] = useState(1)
   const [departments, setDepartments] = useState<DepartmentItem[]>([])
   const [deptLoading, setDeptLoading] = useState(false)
 
@@ -1627,6 +1628,10 @@ function CreateZipRequestDialog({
         specifications: i.specifications || '',
         notes: i.notes || '',
       })))
+      // Pre-fill manufacturing quantity from first item
+      if (editRequest.type === 'manufacturing') {
+        setMfgQuantity(editRequest.items[0].quantity || 1)
+      }
     }
   }, [editRequest, open])
 
@@ -1877,12 +1882,15 @@ function CreateZipRequestDialog({
     setApplicantName('')
     setApplicantDepartmentId('')
     setApplicantDepartmentName('')
+    setMfgQuantity(1)
   }
 
   const handleClose = () => {
     onClose()
     resetForm()
   }
+
+  const maxStep = isManufacturing ? 3 : 4
 
   const validateStep = (): boolean => {
     if (step === 1) return true
@@ -1893,7 +1901,8 @@ function CreateZipRequestDialog({
       }
       return true
     }
-    if (step === 3) {
+    // Step 3 validation: only for purchase (items table)
+    if (step === 3 && !isManufacturing) {
       const validItems = items.filter((i) => i.name.trim())
       if (validItems.length === 0) {
         toast.error('Добавьте хотя бы одну позицию')
@@ -1906,30 +1915,52 @@ function CreateZipRequestDialog({
 
   const nextStep = () => {
     if (!validateStep()) return
-    setStep((prev) => Math.min(prev + 1, 4))
+    // For manufacturing: step 2 → step 3 (files), skip items
+    if (isManufacturing && step === 2) {
+      setStep(3)
+      return
+    }
+    setStep((prev) => Math.min(prev + 1, maxStep))
   }
 
   const prevStep = () => {
+    // For manufacturing: step 3 (files) → step 2
+    if (isManufacturing && step === 3) {
+      setStep(2)
+      return
+    }
     setStep((prev) => Math.max(prev - 1, isEditMode ? 2 : 1))
   }
 
   const submitRequest = async (forApproval: boolean) => {
-    const validItems = items
-      .filter((i) => i.name.trim())
-      .map((i) => ({
-        articleNumber: i.articleNumber,
-        name: i.name,
-        quantity: i.quantity || 1,
-        unit: i.unit || 'шт',
-        unitPrice: i.unitPrice || undefined,
-        drawingNumber: i.drawingNumber || undefined,
-        material: i.material || undefined,
-        specifications: i.specifications || undefined,
-      }))
+    let validItems: any[]
 
-    if (validItems.length === 0) {
-      toast.error('Добавьте хотя бы одну позицию')
-      return
+    if (isManufacturing) {
+      // Build single item from step 2 fields
+      validItems = [{
+        articleNumber: '',
+        name: title.trim(),
+        quantity: mfgQuantity || 1,
+        unit: 'шт',
+      }]
+    } else {
+      validItems = items
+        .filter((i) => i.name.trim())
+        .map((i) => ({
+          articleNumber: i.articleNumber,
+          name: i.name,
+          quantity: i.quantity || 1,
+          unit: i.unit || 'шт',
+          unitPrice: i.unitPrice || undefined,
+          drawingNumber: i.drawingNumber || undefined,
+          material: i.material || undefined,
+          specifications: i.specifications || undefined,
+        }))
+
+      if (validItems.length === 0) {
+        toast.error('Добавьте хотя бы одну позицию')
+        return
+      }
     }
 
     setSubmitting(true)
@@ -2003,7 +2034,9 @@ function CreateZipRequestDialog({
     0,
   )
 
-  const stepLabels = ['Тип заявки', 'Основная информация', 'Позиции', 'Файлы']
+  const stepLabels = isManufacturing
+    ? ['Тип заявки', 'Основная информация', 'Файлы']
+    : ['Тип заявки', 'Основная информация', 'Позиции', 'Файлы']
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
@@ -2012,14 +2045,17 @@ function CreateZipRequestDialog({
           <DialogTitle className="text-lg">{isEditMode ? `Редактировать заявку #${editRequest?.requestNumber}` : 'Создать потребность в ЗИП'}</DialogTitle>
           <DialogDescription>
             {isEditMode
-              ? `Шаг ${step - 1} из 3 — ${stepLabels[step - 1]}`
-              : `Шаг ${step} из 4 — ${stepLabels[step - 1]}`}
+              ? `Шаг ${step - 1} из ${maxStep - 1} — ${stepLabels[step - 1]}`
+              : `Шаг ${step} из ${maxStep} — ${stepLabels[step - 1]}`}
           </DialogDescription>
         </DialogHeader>
 
         {/* Step indicator */}
         <div className="mx-4 mt-2 flex items-center gap-1">
-          {(isEditMode ? [2, 3, 4] : [1, 2, 3, 4]).map((s, idx) => (
+          {(isEditMode
+            ? (isManufacturing ? [2, 3] : [2, 3, 4])
+            : (isManufacturing ? [1, 2, 3] : [1, 2, 3, 4])
+          ).map((s, idx) => (
             <div key={s} className="flex items-center gap-1">
               <div
                 className={`flex size-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
@@ -2032,7 +2068,7 @@ function CreateZipRequestDialog({
               >
                 {s < step ? <CheckCircle2 className="size-4" /> : s}
               </div>
-              {idx < (isEditMode ? 2 : 3) && (
+              {idx < (isManufacturing ? (isEditMode ? 1 : 2) : (isEditMode ? 2 : 3)) && (
                 <div
                   className={`h-0.5 w-6 ${
                     s < step ? 'bg-emerald-300' : 'bg-muted'
@@ -2046,7 +2082,7 @@ function CreateZipRequestDialog({
         <div className="mt-6 flex-1 px-4 pb-4">
           {/* Step 1: Type */}
           {step === 1 && (
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-2xl">
               <RadioGroup value={type} onValueChange={(v) => setType(v as ZipRequestType)}>
                 <label
                   className={`flex cursor-pointer items-start gap-4 rounded-lg border p-4 transition-colors ${
@@ -2084,7 +2120,7 @@ function CreateZipRequestDialog({
                     <div>
                       <p className="font-medium text-sm">Изготовление запчасти</p>
                       <p className="text-xs text-muted-foreground">
-                        Без привязки к оборудованию, с чертежами и спецификацией
+                        Указание количества, чертежи. Оборудование — опционально
                       </p>
                     </div>
                   </div>
@@ -2095,15 +2131,14 @@ function CreateZipRequestDialog({
 
           {/* Step 2: Basic Info */}
           {step === 2 && (
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-3xl">
               <div className="space-y-2">
                 <Label htmlFor="zip-title">Название *</Label>
                 <Input
                   id="zip-title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Например: Закупка подшипников для насоса"
-                  className="w-full"
+                  placeholder={isManufacturing ? 'Например: Изготовление вала для насоса Н-201' : 'Например: Закупка подшипников для насоса'}
                 />
               </div>
               <div className="space-y-2">
@@ -2114,7 +2149,6 @@ function CreateZipRequestDialog({
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Дополнительные сведения о потребности..."
                   rows={3}
-                  className="w-full"
                 />
               </div>
               <div className="flex flex-wrap gap-4">
@@ -2141,65 +2175,77 @@ function CreateZipRequestDialog({
                     className="w-auto min-w-[160px]"
                   />
                 </div>
+                {isManufacturing && (
+                  <div className="space-y-2">
+                    <Label htmlFor="zip-qty">Количество</Label>
+                    <Input
+                      id="zip-qty"
+                      type="number"
+                      min={1}
+                      value={mfgQuantity || ''}
+                      onChange={(e) => setMfgQuantity(parseInt(e.target.value) || 0)}
+                      className="w-auto min-w-[100px]"
+                      placeholder="1"
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* Equipment selector (only for purchase) */}
-              {type !== 'manufacturing' && (
-                <div className="space-y-2">
-                  <Label>Оборудование <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
-                  {equipmentName ? (
-                    <div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 max-w-full">
-                      <span className="text-sm truncate max-w-[400px]">{equipmentName}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0"
-                        onClick={() => {
-                          setEquipmentId('')
-                          setEquipmentName('')
-                        }}
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="relative w-auto">
-                      <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Поиск оборудования по названию или коду..."
-                        value={equipSearch}
-                        onChange={(e) => setEquipSearch(e.target.value)}
-                        className="w-full pl-9"
-                      />
-                      {equipLoading && (
-                        <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                      )}
-                      {equipResults.length > 0 && !equipLoading && (
-                        <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border bg-background shadow-lg">
-                          {equipResults.map((eq) => (
-                            <button
-                              key={eq.id}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
-                              onClick={() => {
-                                setEquipmentId(eq.id)
-                                setEquipmentName(`${eq.code} — ${eq.name}`)
-                                setEquipResults([])
-                                setEquipSearch('')
-                              }}
-                            >
-                              <span className="font-mono text-xs text-muted-foreground">{eq.code}</span>
-                              <span>{eq.name}</span>
-                              {eq.location && (
-                                <span className="ml-auto text-xs text-muted-foreground">{eq.location}</span>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Equipment selector (both types, optional) */}
+              <div className="space-y-2">
+                <Label>Оборудование <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
+                {equipmentName ? (
+                  <div className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 max-w-full">
+                    <span className="text-sm truncate max-w-[400px]">{equipmentName}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      onClick={() => {
+                        setEquipmentId('')
+                        setEquipmentName('')
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="relative w-auto max-w-lg">
+                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Поиск оборудования по названию или коду..."
+                      value={equipSearch}
+                      onChange={(e) => setEquipSearch(e.target.value)}
+                      className="pl-9"
+                    />
+                    {equipLoading && (
+                      <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    )}
+                    {equipResults.length > 0 && !equipLoading && (
+                      <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border bg-background shadow-lg">
+                        {equipResults.map((eq) => (
+                          <button
+                            key={eq.id}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
+                            onClick={() => {
+                              setEquipmentId(eq.id)
+                              setEquipmentName(`${eq.code} — ${eq.name}`)
+                              setEquipResults([])
+                              setEquipSearch('')
+                            }}
+                          >
+                            <span className="font-mono text-xs text-muted-foreground">{eq.code}</span>
+                            <span>{eq.name}</span>
+                            {eq.location && (
+                              <span className="ml-auto text-xs text-muted-foreground">{eq.location}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Applicant */}
               <div className="space-y-2">
@@ -2238,8 +2284,8 @@ function CreateZipRequestDialog({
             </div>
           )}
 
-          {/* Step 3: Items */}
-          {step === 3 && (
+          {/* Step 3: Items (purchase only) or Files (manufacturing) */}
+          {step === 3 && !isManufacturing && (
             <div className="space-y-4">
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
@@ -2447,9 +2493,69 @@ function CreateZipRequestDialog({
             </div>
           )}
 
-          {/* Step 4: Files */}
-          {step === 4 && (
-            <div className="space-y-4">
+          {/* Step 3 (manufacturing): Files */}
+          {step === 3 && isManufacturing && (
+            <div className="space-y-4 max-w-3xl">
+              <div
+                className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-orange-400 hover:bg-orange-50/30"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="size-8 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Нажмите для выбора файлов</p>
+                  <p className="text-xs text-muted-foreground">
+                    или перетащите файлы в эту область
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">Любой формат</p>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {files.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    Прикреплённые файлы ({files.length})
+                  </p>
+                  {files.map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate text-sm">{f.file.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          ({formatFileSize(f.file.size)})
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => removeFile(f.id)}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Вы также сможете прикрепить файлы после создания заявки.
+              </p>
+            </div>
+          )}
+
+          {/* Step 4 (purchase only): Files */}
+          {step === 4 && !isManufacturing && (
+            <div className="space-y-4 max-w-3xl">
               <div
                 className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-orange-400 hover:bg-orange-50/30"
                 onClick={() => fileInputRef.current?.click()}
@@ -2515,12 +2621,12 @@ function CreateZipRequestDialog({
                   Назад
                 </Button>
               )}
-              {step < 4 ? (
+              {step < maxStep ? (
                 <Button size="sm" onClick={nextStep} className="h-auto py-0.5 px-2.5 gap-1 bg-orange-600 hover:bg-orange-700">
                   Далее
                   <ArrowRight className="size-3" />
                 </Button>
-              ) : step === 4 ? (
+              ) : (
                 <>
                   <Button
                     size="sm"
@@ -2550,11 +2656,6 @@ function CreateZipRequestDialog({
                     Отправить на согласование
                   </Button>
                 </>
-              ) : (
-                <Button size="sm" onClick={nextStep} className="h-auto py-0.5 px-2.5 gap-1 bg-orange-600 hover:bg-orange-700">
-                  Далее
-                  <ArrowRight className="size-3" />
-                </Button>
               )}
             </div>
             <Button variant="ghost" size="sm" onClick={handleClose} className="h-auto py-0.5 px-2.5">
