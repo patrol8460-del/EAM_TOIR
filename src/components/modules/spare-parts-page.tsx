@@ -218,11 +218,19 @@ interface ZipRequest {
   applicantDepartmentName: string | null
 }
 
+interface DepartmentUser {
+  id: string
+  name: string
+  role: string
+  email: string
+}
+
 interface DepartmentItem {
   id: string
   name: string
   code: string
   headName: string | null
+  users?: DepartmentUser[]
 }
 
 interface ZipRequestsResponse {
@@ -1577,6 +1585,7 @@ function CreateZipRequestDialog({
   onSuccess: () => void
   editRequest?: ZipRequest | null
 }) {
+  const { user } = useAuthStore()
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [type, setType] = useState<ZipRequestType>('purchase')
@@ -1598,6 +1607,11 @@ function CreateZipRequestDialog({
   const [mfgQuantity, setMfgQuantity] = useState(1)
   const [departments, setDepartments] = useState<DepartmentItem[]>([])
   const [deptLoading, setDeptLoading] = useState(false)
+  // User search for applicant name field
+  const [userSearch, setUserSearch] = useState('')
+  const [userResults, setUserResults] = useState<{ user: DepartmentUser; deptName: string }[]>([])
+  const [userSearchOpen, setUserSearchOpen] = useState(false)
+  const [allDeptUsers, setAllDeptUsers] = useState<{ user: DepartmentUser; deptName: string }[]>([])
 
   const isEditMode = !!editRequest
 
@@ -1635,7 +1649,14 @@ function CreateZipRequestDialog({
     }
   }, [editRequest, open])
 
-  // Fetch departments on mount
+  // Set default applicant name to current user when creating new request
+  useEffect(() => {
+    if (open && !editRequest && user?.name) {
+      setApplicantName(user.name)
+    }
+  }, [open, editRequest, user?.name])
+
+  // Fetch departments on mount and build user list
   useEffect(() => {
     const fetchDepts = async () => {
       try {
@@ -1643,9 +1664,21 @@ function CreateZipRequestDialog({
         const res = await fetch('/api/personnel')
         if (res.ok) {
           const data = await res.json()
-          setDepartments((data.departments || []).map((d: any) => ({
+          const depts = (data.departments || []).map((d: any) => ({
             id: d.id, name: d.name, code: d.code, headName: d.headName,
-          })))
+            users: (d.users || []).map((u: any) => ({ id: u.id, name: u.name, role: u.role, email: u.email })),
+          }))
+          setDepartments(depts)
+          // Build flat list of all users with their department name
+          const users: { user: DepartmentUser; deptName: string }[] = []
+          for (const dept of depts) {
+            if (dept.users) {
+              for (const u of dept.users) {
+                users.push({ user: u, deptName: dept.name })
+              }
+            }
+          }
+          setAllDeptUsers(users)
         }
       } catch { /* silent */ } finally { setDeptLoading(false) }
     }
@@ -1682,6 +1715,23 @@ function CreateZipRequestDialog({
     }, 300)
     return () => clearTimeout(timer)
   }, [equipSearch])
+
+  // User search for applicant name (client-side filter)
+  useEffect(() => {
+    if (!userSearch || userSearch.length < 1) {
+      setUserResults([])
+      setUserSearchOpen(false)
+      return
+    }
+    const q = userSearch.toLowerCase()
+    const filtered = allDeptUsers.filter(
+      ({ user, deptName }) =>
+        user.name.toLowerCase().includes(q) ||
+        deptName.toLowerCase().includes(q)
+    ).slice(0, 10)
+    setUserResults(filtered)
+    setUserSearchOpen(filtered.length > 0)
+  }, [userSearch, allDeptUsers])
 
   // Spare part catalog search
   const handleSpSearch = useCallback((idx: number, query: string) => {
@@ -2287,18 +2337,15 @@ function CreateZipRequestDialog({
                 )}
               </div>
 
-              {/* Applicant */}
+              {/* Author of need */}
               <div className="space-y-2">
-                <Label>Заявитель <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
+                <Label>Автор потребности <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
                 <Select
                   value={applicantDepartmentId}
                   onValueChange={(v) => {
                     const dept = departments.find(d => d.id === v)
                     setApplicantDepartmentId(v)
                     setApplicantDepartmentName(dept?.name || '')
-                    if (!applicantName && dept?.headName) {
-                      setApplicantName(dept.headName)
-                    }
                   }}
                 >
                   <SelectTrigger className="w-auto min-w-[220px]">
@@ -2312,14 +2359,68 @@ function CreateZipRequestDialog({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="zip-applicant-name">ФИО заявителя</Label>
-                <Input
-                  id="zip-applicant-name"
-                  value={applicantName}
-                  onChange={(e) => setApplicantName(e.target.value)}
-                  placeholder="ФИО заявителя"
-                  className="w-auto min-w-[200px]"
-                />
+                <Label htmlFor="zip-applicant-name">ФИО заявителя <span className="text-xs text-muted-foreground font-normal">(выбор из справочника)</span></Label>
+                <div className="relative w-full max-w-md">
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      id="zip-applicant-name"
+                      value={userSearch || applicantName}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setUserSearch(val)
+                        setApplicantName(val)
+                      }}
+                      onFocus={() => {
+                        setUserSearch(applicantName)
+                        if (applicantName.length >= 1) {
+                          const q = applicantName.toLowerCase()
+                          const filtered = allDeptUsers.filter(
+                            ({ user, deptName }) =>
+                              user.name.toLowerCase().includes(q) ||
+                              deptName.toLowerCase().includes(q)
+                          ).slice(0, 10)
+                          setUserResults(filtered)
+                          setUserSearchOpen(filtered.length > 0)
+                        }
+                      }}
+                      placeholder="Начните вводить для поиска..."
+                    />
+                    {applicantName && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        onClick={() => {
+                          setApplicantName('')
+                          setUserSearch('')
+                        }}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  {userSearchOpen && userResults.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full max-w-md overflow-y-auto rounded-lg border bg-background shadow-lg max-h-48">
+                      {userResults.map(({ user, deptName }) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
+                          onClick={() => {
+                            setApplicantName(user.name)
+                            setUserSearch('')
+                            setUserSearchOpen(false)
+                          }}
+                        >
+                          <UserCircle className="size-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{user.name}</span>
+                          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{deptName}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -3093,32 +3194,40 @@ function ZipRequestsTab() {
                       <TableCell className="hidden text-xs text-muted-foreground lg:table-cell max-w-[120px] truncate">
                         {req.applicantName || '—'}
                       </TableCell>
-                      <TableCell className="pr-6 text-right" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-8">
-                              <MoreHorizontal className="size-4" />
+                      <TableCell className="pr-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            title="Просмотр"
+                            onClick={() => openDetail(req.id)}
+                          >
+                            <Eye className="size-4" />
+                          </Button>
+                          {(req.status === 'draft' || req.status === 'rejected') && user?.id === req.authorId && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8"
+                              title="Редактировать"
+                              onClick={() => openEditDialog(req)}
+                            >
+                              <Pencil className="size-4" />
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem className="gap-2" onClick={() => openDetail(req.id)}>
-                              <Eye className="size-4" /> Просмотр
-                            </DropdownMenuItem>
-                            {(req.status === 'draft' || req.status === 'rejected') && user?.id === req.authorId && (
-                              <DropdownMenuItem className="gap-2" onClick={() => openEditDialog(req)}>
-                                <Pencil className="size-4" /> Редактировать
-                              </DropdownMenuItem>
-                            )}
-                            {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && user?.id === req.authorId && (
-                              <DropdownMenuItem
-                                className="gap-2 text-destructive"
-                                onClick={() => openDeleteDialog(req)}
-                              >
-                                <Trash2 className="size-4" /> Удалить
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          )}
+                          {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && user?.id === req.authorId && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-destructive hover:text-destructive"
+                              title="Удалить"
+                              onClick={() => openDeleteDialog(req)}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
