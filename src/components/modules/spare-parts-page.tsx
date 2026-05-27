@@ -2337,9 +2337,18 @@ function CreateZipRequestDialog({
                 )}
               </div>
 
-              {/* Author of need */}
+              {/* Author of need — read-only, auto from current user */}
               <div className="space-y-2">
-                <Label>Автор потребности <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
+                <Label>Автор потребности</Label>
+                <Input
+                  value={user?.name || ''}
+                  readOnly
+                  disabled
+                  className="w-auto max-w-xs bg-muted cursor-not-allowed"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Подразделение <span className="text-xs text-muted-foreground font-normal">(необязательно)</span></Label>
                 <Select
                   value={applicantDepartmentId}
                   onValueChange={(v) => {
