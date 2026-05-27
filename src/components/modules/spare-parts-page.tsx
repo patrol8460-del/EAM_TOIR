@@ -2080,7 +2080,7 @@ function CreateZipRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px] lg:max-w-[92vw] xl:max-w-[1100px]">
         <DialogHeader>
           <DialogTitle className="text-lg">{isEditMode ? `Редактировать заявку #${editRequest?.requestNumber}` : 'Создать потребность в ЗИП'}</DialogTitle>
           <DialogDescription>
