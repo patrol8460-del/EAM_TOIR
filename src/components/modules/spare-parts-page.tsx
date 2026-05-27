@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, createPortal } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Plus,
   Search,
@@ -1690,21 +1690,17 @@ function CreateZipRequestDialog({
   const [spSearchQuery, setSpSearchQuery] = useState('')
   const [spSearchResults, setSpSearchResults] = useState<SparePartItem[]>([])
   const [spSearchLoading, setSpSearchLoading] = useState(false)
-  const spAnchorRefs = useRef<(HTMLDivElement | null)[]>([]) // per-row refs for dropdown positioning
-  const spActiveIdxRef = useRef<number | null>(null) // persist active row index for portal clicks
+  const spAnchorRefs = useRef<(HTMLDivElement | null)[]>([])
+  const spActiveIdxRef = useRef<number | null>(null)
   const [spDropdownPos, setSpDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
-  // Compute dropdown position from the anchor element of the active row
+  // Compute dropdown position from anchor element
   useEffect(() => {
     if (spSearchIdx !== null && spSearchResults.length > 0 && !spSearchLoading) {
       const anchor = spAnchorRefs.current[spSearchIdx]
       if (anchor) {
         const rect = anchor.getBoundingClientRect()
-        setSpDropdownPos({
-          top: rect.bottom + 4,
-          left: rect.left,
-          width: Math.max(rect.width, 280),
-        })
+        setSpDropdownPos({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 280) })
       }
     } else {
       setSpDropdownPos(null)
@@ -2176,9 +2172,9 @@ function CreateZipRequestDialog({
     : ['Тип заявки', 'Основная информация', 'Позиции', 'Файлы']
 
   return (
-    <>
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px] lg:max-w-[92vw] xl:max-w-[1100px]">
+      <DialogContent className="max-h-[90vh] flex flex-col sm:max-w-[680px] lg:max-w-[92vw] xl:max-w-[1100px] overflow-hidden">
+        <div className="overflow-y-auto flex-1 min-h-0">
         <DialogHeader>
           <DialogTitle className="text-lg">{isEditMode ? `Редактировать заявку #${editRequest?.requestNumber}` : 'Создать потребность в ЗИП'}</DialogTitle>
           <DialogDescription>
@@ -2531,7 +2527,6 @@ function CreateZipRequestDialog({
                               }}
                               onFocus={() => handleSpSearch(idx, item.articleNumber)}
                               onBlur={() => {
-                                // Delay closing so click on dropdown registers
                                 setTimeout(() => {
                                   setSpSearchIdx(null)
                                   setSpSearchResults([])
@@ -2541,7 +2536,7 @@ function CreateZipRequestDialog({
                               placeholder="ОЗМ"
                               className="h-8 text-xs pr-14"
                             />
-                            <div className="absolute right-0.5 top-1/2 -translate-y-1/2 flex items-center">
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -2831,8 +2826,38 @@ function CreateZipRequestDialog({
             </div>
           )}
 
+          </div>{/* end scrollable wrapper */}
+
+          {/* Spare part dropdown — rendered outside overflow wrapper, uses fixed positioning */}
+          {spDropdownPos && spSearchResults.length > 0 && !spSearchLoading && (
+            <div
+              className="fixed z-[9999] max-h-48 overflow-y-auto rounded-lg border bg-popover shadow-lg"
+              style={{ top: spDropdownPos.top, left: spDropdownPos.left, width: spDropdownPos.width }}
+            >
+              {spSearchResults.map((sp) => (
+                <button
+                  key={sp.id}
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    if (spActiveIdxRef.current !== null) {
+                      selectSparePart(spActiveIdxRef.current, sp)
+                    }
+                  }}
+                >
+                  <span className="shrink-0 font-mono text-orange-600">{sp.code}</span>
+                  <span className="truncate">{sp.name}</span>
+                  {sp.currentStock > 0 && (
+                    <span className="ml-auto shrink-0 text-muted-foreground">ост: {sp.currentStock}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Navigation */}
-          <DialogFooter className="mt-6 gap-2 border-t pt-4 flex-col sm:flex-row sm:justify-end">
+          <DialogFooter className="mt-4 gap-2 border-t pt-4 flex-col sm:flex-row sm:justify-end shrink-0">
             <div className="flex w-full gap-2 sm:w-auto">
               {step > 1 && (
                 <Button variant="outline" size="sm" onClick={prevStep} className="h-auto py-0.5 px-2.5">
@@ -2883,37 +2908,6 @@ function CreateZipRequestDialog({
         </div>
       </DialogContent>
     </Dialog>
-    {/* Spare part search dropdown — portal to body, outside any overflow containers */}
-    {open && spDropdownPos && spSearchResults.length > 0 &&
-      createPortal(
-        <div
-          className="fixed z-[9999] max-h-48 overflow-y-auto rounded-lg border bg-popover shadow-lg"
-          style={{ top: spDropdownPos.top, left: spDropdownPos.left, width: spDropdownPos.width }}
-        >
-          {spSearchResults.map((sp) => (
-            <button
-              key={sp.id}
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors"
-              onMouseDown={(e) => {
-                e.preventDefault()
-                if (spActiveIdxRef.current !== null) {
-                  selectSparePart(spActiveIdxRef.current, sp)
-                }
-              }}
-            >
-              <span className="shrink-0 font-mono text-orange-600">{sp.code}</span>
-              <span className="truncate">{sp.name}</span>
-              {sp.currentStock > 0 && (
-                <span className="ml-auto shrink-0 text-muted-foreground">ост: {sp.currentStock}</span>
-              )}
-            </button>
-          ))}
-        </div>,
-        document.body
-      )
-    }
-    </>
   )
 }
 
