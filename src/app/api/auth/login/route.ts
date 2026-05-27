@@ -1,6 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyPassword } from '@/lib/auth'
+import { scryptSync, randomBytes } from 'crypto'
+
+// ─── Auto-seed if database is empty ───
+let seedPromise: Promise<void> | null = null
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex')
+  const hash = scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
+
+async function ensureSeeded() {
+  if (seedPromise) return seedPromise
+  seedPromise = (async () => {
+    try {
+      const userCount = await db.user.count()
+      if (userCount > 0) return
+
+      console.log('[auto-seed] Database empty, seeding...')
+
+      // Create demo users
+      const users = [
+        { email: 'admin@enterprise.ru', name: 'Администратор', role: 'admin' },
+        { email: 'manager@enterprise.ru', name: 'Иванов Иван Иванович', role: 'manager' },
+        { email: 'engineer@enterprise.ru', name: 'Петров Пётр Петрович', role: 'engineer' },
+        { email: 'worker@enterprise.ru', name: 'Сидоров Сергей Сергеевич', role: 'worker' },
+        { email: 'kovalev@enterprise.ru', name: 'Ковалёв Алексей Дмитриевич', role: 'worker' },
+        { email: 'morozov@enterprise.ru', name: 'Морозов Дмитрий Владимирович', role: 'worker' },
+        { email: 'volkov@enterprise.ru', name: 'Волков Николай Андреевич', role: 'engineer' },
+      ]
+
+      for (const u of users) {
+        await db.user.upsert({
+          where: { email: u.email },
+          update: {},
+          create: {
+            email: u.email,
+            passwordHash: hashPassword('admin123'),
+            name: u.name,
+            role: u.role,
+            isActive: true,
+          },
+        })
+      }
+
+      // Seed approval routes
+      await seedApprovalRoutesIfNeeded()
+
+      console.log('[auto-seed] Done — created demo users and approval routes')
+    } catch (err) {
+      console.error('[auto-seed] Failed:', err)
+      seedPromise = null // Allow retry
+    }
+  })()
+  return seedPromise
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +69,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Ensure database is seeded
+    await ensureSeeded()
 
     const user = await db.user.findUnique({
       where: { email: email.toLowerCase().trim() },
