@@ -277,3 +277,22 @@ TODO (when sandbox stabilizes):
 - Файлы: проверить загрузку и скачивание
 - Дашборд: проверить отображение личных задач
 - Колокольчик: проверить переход к конкретной задаче
+---
+Task ID: 1
+Agent: Main
+Task: Fix manufacturing scenario visibility - rebuild production server + adjust field widths
+
+Work Log:
+- Discovered dev server runs in production mode via .zscripts/dev.sh (next build + standalone)
+- Previous code changes for manufacturing scenario were already in source but not reflected due to production build cache
+- Adjusted DialogContent width from sm:max-w-[80vw] lg:max-w-[85vw] to sm:max-w-[680px]
+- Changed step containers from max-w-3xl to max-w-2xl for consistent field widths across all steps
+- Rebuilt project with npx next build
+- Copied static files to standalone build
+- Restarted production server (auto-restart via dev.sh)
+
+Stage Summary:
+- Manufacturing scenario changes now live: 3 steps (Type, Info with quantity+equipment, Files)
+- Dialog width reduced to 680px for more compact, balanced layout
+- All step containers use max-w-2xl for consistent field sizing
+- Server running on port 3000 with new build

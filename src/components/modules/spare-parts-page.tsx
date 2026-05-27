@@ -2040,7 +2040,7 @@ function CreateZipRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[80vw] lg:max-w-[85vw]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]">
         <DialogHeader>
           <DialogTitle className="text-lg">{isEditMode ? `Редактировать заявку #${editRequest?.requestNumber}` : 'Создать потребность в ЗИП'}</DialogTitle>
           <DialogDescription>
@@ -2131,7 +2131,7 @@ function CreateZipRequestDialog({
 
           {/* Step 2: Basic Info */}
           {step === 2 && (
-            <div className="space-y-4 max-w-3xl">
+            <div className="space-y-4 max-w-2xl">
               <div className="space-y-2">
                 <Label htmlFor="zip-title">Название *</Label>
                 <Input
@@ -2495,7 +2495,7 @@ function CreateZipRequestDialog({
 
           {/* Step 3 (manufacturing): Files */}
           {step === 3 && isManufacturing && (
-            <div className="space-y-4 max-w-3xl">
+            <div className="space-y-4 max-w-2xl">
               <div
                 className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-orange-400 hover:bg-orange-50/30"
                 onClick={() => fileInputRef.current?.click()}
@@ -2555,7 +2555,7 @@ function CreateZipRequestDialog({
 
           {/* Step 4 (purchase only): Files */}
           {step === 4 && !isManufacturing && (
-            <div className="space-y-4 max-w-3xl">
+            <div className="space-y-4 max-w-2xl">
               <div
                 className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors hover:border-orange-400 hover:bg-orange-50/30"
                 onClick={() => fileInputRef.current?.click()}
