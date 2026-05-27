@@ -34,7 +34,7 @@ async function seed() {
     manager = await db.user.create({
       data: {
         email: 'manager@enterprise.ru',
-        passwordHash: hashPassword('manager123'),
+        passwordHash: hashPassword('admin123'),
         name: 'Иванов Иван Иванович',
         role: 'manager',
         isActive: true,
@@ -51,7 +51,7 @@ async function seed() {
     engineer = await db.user.create({
       data: {
         email: 'engineer@enterprise.ru',
-        passwordHash: hashPassword('engineer123'),
+        passwordHash: hashPassword('admin123'),
         name: 'Петров Пётр Петрович',
         role: 'engineer',
         isActive: true,
@@ -68,7 +68,7 @@ async function seed() {
     worker = await db.user.create({
       data: {
         email: 'worker@enterprise.ru',
-        passwordHash: hashPassword('worker123'),
+        passwordHash: hashPassword('admin123'),
         name: 'Сидоров Сергей Сергеевич',
         role: 'worker',
         isActive: true,
@@ -85,7 +85,7 @@ async function seed() {
   let worker2: { id: string } = worker2Exists || (await db.user.create({
     data: {
       email: worker2Email,
-      passwordHash: hashPassword('worker123'),
+      passwordHash: hashPassword('admin123'),
       name: 'Ковалёв Алексей Дмитриевич',
       role: 'worker',
       isActive: true,
@@ -97,7 +97,7 @@ async function seed() {
   let worker3: { id: string } = worker3Exists || (await db.user.create({
     data: {
       email: worker3Email,
-      passwordHash: hashPassword('worker123'),
+      passwordHash: hashPassword('admin123'),
       name: 'Морозов Дмитрий Владимирович',
       role: 'worker',
       isActive: true,
@@ -109,7 +109,7 @@ async function seed() {
   let worker4: { id: string } = worker4Exists || (await db.user.create({
     data: {
       email: worker4Email,
-      passwordHash: hashPassword('worker123'),
+      passwordHash: hashPassword('admin123'),
       name: 'Волков Николай Андреевич',
       role: 'engineer',
       isActive: true,
