@@ -66,8 +66,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
-import { useAuthStore } from '@/store/auth-store'
-import { useAppStore } from '@/store/app-store'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -200,11 +198,6 @@ function LotStatusBadge({ status }: { status: string }) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProcurementTab() {
-  // Store hooks available for future use (e.g., role-based access)
-  const _user = useAuthStore((s) => s.user)
-  const _activeModule = useAppStore((s) => s.activeModule)
-  void _user
-  void _activeModule
 
   // ── Consolidated state ──
   const [consolidatedData, setConsolidatedData] = useState<ConsolidatedItem[]>([])
