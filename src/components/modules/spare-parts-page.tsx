@@ -1601,7 +1601,6 @@ function CreateZipRequestDialog({
   const [equipResults, setEquipResults] = useState<EquipmentItem[]>([])
   const [equipLoading, setEquipLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const dialogContentRef = useRef<HTMLDivElement>(null)
   const [applicantName, setApplicantName] = useState('')
   const [applicantDepartmentId, setApplicantDepartmentId] = useState('')
   const [applicantDepartmentName, setApplicantDepartmentName] = useState('')
@@ -1698,12 +1697,11 @@ function CreateZipRequestDialog({
   // Compute dropdown position from anchor element
   // Note: DialogContent uses CSS transform (translate), so position: fixed
   // children are relative to the dialog, not the viewport.
-  // We subtract the dialog's rect to get coordinates relative to the dialog.
+  // We find the dialog via data-slot attribute and subtract its rect.
   useEffect(() => {
     if (spSearchIdx !== null && spSearchResults.length > 0 && !spSearchLoading) {
       const anchor = spAnchorRefs.current[spSearchIdx]
-      // Try ref first, fall back to querySelector for Radix dialog content
-      const dialog = dialogContentRef.current || document.querySelector('[data-slot="dialog-content"]') as HTMLElement | null
+      const dialog = document.querySelector('[data-slot="dialog-content"]') as HTMLElement | null
       if (anchor && dialog) {
         const anchorRect = anchor.getBoundingClientRect()
         const dialogRect = dialog.getBoundingClientRect()
@@ -2184,7 +2182,7 @@ function CreateZipRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent ref={dialogContentRef} className="max-h-[90vh] flex flex-col sm:max-w-[680px] lg:max-w-[92vw] xl:max-w-[1100px] overflow-hidden">
+      <DialogContent className="max-h-[90vh] flex flex-col sm:max-w-[680px] lg:max-w-[92vw] xl:max-w-[1100px] overflow-hidden">
         <div className="overflow-y-auto flex-1 min-h-0">
         <DialogHeader>
           <DialogTitle className="text-lg">{isEditMode ? `Редактировать заявку #${editRequest?.requestNumber}` : 'Создать потребность в ЗИП'}</DialogTitle>
