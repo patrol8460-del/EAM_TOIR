@@ -29,9 +29,9 @@ export async function GET(request: NextRequest) {
     const hasSparePart = searchParams.get('hasSparePart') === 'true'
     const noSparePart = searchParams.get('noSparePart') === 'true'
 
-    // Build where clause for zip requests — only approved, ordered, pending_approval
+    // Build where clause for zip requests — only approved
     const requestWhere: Record<string, unknown> = {
-      status: { in: ['approved', 'ordered', 'pending_approval'] },
+      status: { in: ['approved', 'ordered'] },
     }
 
     // Fetch all items from matching requests with their request info

@@ -353,3 +353,33 @@ Stage Summary:
 - Added `dialogContentRef` to CreateZipRequestDialog's DialogContent
 - Modified the useEffect that computes `spDropdownPos` to subtract dialog rect from anchor rect
 - File modified: `src/components/modules/spare-parts-page.tsx`
+
+---
+Task ID: 5
+Agent: Main
+Task: Create buyer's workspace in "Запасные части" for consolidated procurement
+
+Work Log:
+- Added ProcurementLot and ProcurementLotItem models to Prisma schema
+- Added `procurementLots` relation to User model
+- Pushed schema to database and regenerated Prisma client
+- Updated /api/zip-requests/consolidated to only return approved/ordered requests (removed pending_approval)
+- Created /api/procurement/lots (GET list + POST create) with auto-numbering ЗАК-YYYYMMDD-NNN
+- Created /api/procurement/lots/[id] (GET detail + PUT update + DELETE) with status transitions
+- When lot status changes to "ordered", source ZIP requests also change to "ordered"
+- Created /src/components/modules/procurement-tab.tsx (~1626 lines) with two sub-tabs:
+  - "Сводная таблица" — consolidated demand table aggregated by ОЗМ with stats, filters, checkboxes
+  - "Закупочные лоты" — saved lots with status filter, CRUD, detail view
+- Added "Закупки" tab trigger to SparePartsPage (visible for admin and manager roles)
+- All APIs tested: create lot, list lots, get detail, status change, delete
+
+Stage Summary:
+- Buyer workspace accessible via "Закупки" tab in "Запасные части" module (admin/manager only)
+- Consolidated table shows all approved requests aggregated by ОЗМ with expandable source breakdown
+- Buyer can filter by search (ОЗМ/name), department, catalog linkage
+- Buyer can select items via checkboxes and create procurement lots with "Создать лот" button
+- Floating action bar shows selection summary (count, qty, total value)
+- Lot lifecycle: draft → submitted → ordered → completed (or cancelled)
+- When lot is marked "ordered", source ZIP requests auto-transition to "ordered" status
+- Lint clean (no new errors)
+- Dev server running on port 3000

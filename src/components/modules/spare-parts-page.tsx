@@ -99,6 +99,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth-store'
 import { useAppStore } from '@/store/app-store'
+import ProcurementTab from '@/components/modules/procurement-tab'
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -3955,6 +3956,7 @@ export default function SparePartsPage() {
   const { user } = useAuthStore()
   const { pendingTask, setPendingTask } = useAppStore()
   const isAdmin = user?.role === 'admin'
+  const isBuyer = user?.role === 'admin' || user?.role === 'manager'
 
   // When a pending task comes from the bell notification, switch to requests tab
   const [activeTab, setActiveTab] = useState('catalog')
@@ -3992,6 +3994,12 @@ export default function SparePartsPage() {
               <span className="hidden sm:inline">Маршруты</span>
             </TabsTrigger>
           )}
+          {isBuyer && (
+            <TabsTrigger value="procurement" className="gap-1.5">
+              <ShoppingCart className="size-4" />
+              <span className="hidden sm:inline">Закупки</span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="catalog">
@@ -4005,6 +4013,12 @@ export default function SparePartsPage() {
         {isAdmin && (
           <TabsContent value="routes">
             <ApprovalRoutesTab />
+          </TabsContent>
+        )}
+
+        {isBuyer && (
+          <TabsContent value="procurement">
+            <ProcurementTab />
           </TabsContent>
         )}
       </Tabs>

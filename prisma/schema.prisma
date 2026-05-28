@@ -31,6 +31,7 @@ model User {
   issuedPermits     WorkPermit[] @relation("PermitIssuer")
   createdZipRequests ZipRequest[] @relation("ZipRequestAuthor")
   approvalDecisions ApprovalAction[] @relation("ApprovalActionDecider")
+  procurementLots ProcurementLot[] @relation("ProcurementLotCreator")
 
   @@index([departmentId])
   @@index([brigadeId])
@@ -506,4 +507,39 @@ model ApprovalAction {
   @@index([zipRequestId])
   @@index([approvalStepId])
   @@index([status])
+}
+
+// ============ ЗАКУПОЧНЫЕ ЛОТЫ ============
+
+model ProcurementLot {
+  id            String   @id @default(cuid())
+  number        String   @unique   // ЗАК-YYYYMMDD-NNN
+  title         String
+  description   String?
+  status        String   @default("draft") // draft, submitted, ordered, completed, cancelled
+  createdBy     String   // userId
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  creator       User     @relation("ProcurementLotCreator", fields: [createdBy], references: [id])
+  items         ProcurementLotItem[]
+
+  @@index([status])
+  @@index([createdBy])
+}
+
+model ProcurementLotItem {
+  id                String   @id @default(cuid())
+  procurementLotId  String
+  articleNumber     String   // ОЗМ
+  name              String
+  unit              String   @default("шт")
+  quantity          Int
+  unitPrice         Float?
+  notes             String?
+  sourceData        String?  // JSON: массив источников {zipRequestId, zipRequestNumber, itemId, quantity, departmentName, applicantName}
+
+  procurementLot    ProcurementLot @relation(fields: [procurementLotId], references: [id], onDelete: Cascade)
+
+  @@index([procurementLotId])
 }
