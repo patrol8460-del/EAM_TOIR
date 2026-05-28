@@ -175,6 +175,7 @@ interface ApprovalAction {
   userName?: string
   comment?: string
   actedAt?: string
+  isOptional?: boolean
 }
 
 interface ApprovalStep {
@@ -1691,31 +1692,6 @@ function CreateZipRequestDialog({
   const [spSearchQuery, setSpSearchQuery] = useState('')
   const [spSearchResults, setSpSearchResults] = useState<SparePartItem[]>([])
   const [spSearchLoading, setSpSearchLoading] = useState(false)
-  const spAnchorRefs = useRef<(HTMLDivElement | null)[]>([])
-  const spActiveIdxRef = useRef<number | null>(null)
-  const [spDropdownPos, setSpDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
-
-  // Compute dropdown position from anchor element
-  // Note: DialogContent uses CSS transform (translate), so position: fixed
-  // children are relative to the dialog, not the viewport.
-  // We find the dialog via data-slot attribute and subtract its rect.
-  useEffect(() => {
-    if (spSearchIdx !== null && spSearchResults.length > 0 && !spSearchLoading) {
-      const anchor = spAnchorRefs.current[spSearchIdx]
-      const dialog = document.querySelector('[data-slot="dialog-content"]') as HTMLElement | null
-      if (anchor && dialog) {
-        const anchorRect = anchor.getBoundingClientRect()
-        const dialogRect = dialog.getBoundingClientRect()
-        setSpDropdownPos({
-          top: anchorRect.bottom - dialogRect.top + 2,
-          left: anchorRect.left - dialogRect.left,
-          width: Math.max(anchorRect.width, 280)
-        })
-      }
-    } else {
-      setSpDropdownPos(null)
-    }
-  }, [spSearchIdx, spSearchResults, spSearchLoading])
 
   const isManufacturing = type === 'manufacturing'
 
@@ -1761,7 +1737,6 @@ function CreateZipRequestDialog({
 
   // Spare part catalog search
   const handleSpSearch = useCallback((idx: number, query: string) => {
-    spActiveIdxRef.current = idx
     setSpSearchIdx(idx)
     setSpSearchQuery(query)
   }, [])
@@ -2514,7 +2489,7 @@ function CreateZipRequestDialog({
                       <TableRow key={idx}>
                         {!isManufacturing && (
                         <TableCell>
-                          <div ref={(el) => { spAnchorRefs.current[idx] = el }} className="relative">
+                          <div className="relative">
                             <Input
                               value={item.articleNumber}
                               onChange={(e) => {
@@ -2559,8 +2534,27 @@ function CreateZipRequestDialog({
                               </Button>
                             </div>
                             {spSearchIdx === idx && spSearchLoading && (
-                              <div className="absolute right-10 top-1/2 -translate-y-1/2">
-                                <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                              <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 size-3 animate-spin text-muted-foreground" />
+                            )}
+                            {spSearchIdx === idx && spSearchResults.length > 0 && !spSearchLoading && (
+                              <div className="absolute left-0 top-full z-50 mt-1 max-h-48 w-64 overflow-y-auto rounded-lg border bg-popover shadow-lg">
+                                {spSearchResults.map((sp) => (
+                                  <button
+                                    key={sp.id}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault()
+                                      selectSparePart(idx, sp)
+                                    }}
+                                  >
+                                    <span className="shrink-0 font-mono text-orange-600">{sp.code}</span>
+                                    <span className="truncate">{sp.name}</span>
+                                    {sp.currentStock > 0 && (
+                                      <span className="ml-auto shrink-0 text-muted-foreground">ост: {sp.currentStock}</span>
+                                    )}
+                                  </button>
+                                ))}
                               </div>
                             )}
                           </div>
@@ -2594,7 +2588,7 @@ function CreateZipRequestDialog({
                               updateItem(
                                 idx,
                                 'unitPrice',
-                                parseFloat(e.target.value) || undefined,
+                                Number(e.target.value) || 0,
                               )
                             }
                             className="h-8 text-xs text-right"
@@ -2837,34 +2831,6 @@ function CreateZipRequestDialog({
           )}
 
           </div>{/* end scrollable wrapper */}
-
-          {/* Spare part dropdown — rendered outside overflow wrapper, uses fixed positioning */}
-          {spDropdownPos && spSearchResults.length > 0 && !spSearchLoading && (
-            <div
-              className="fixed z-[9999] max-h-48 overflow-y-auto rounded-lg border bg-popover shadow-lg"
-              style={{ top: spDropdownPos.top, left: spDropdownPos.left, width: spDropdownPos.width }}
-            >
-              {spSearchResults.map((sp) => (
-                <button
-                  key={sp.id}
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    if (spActiveIdxRef.current !== null) {
-                      selectSparePart(spActiveIdxRef.current, sp)
-                    }
-                  }}
-                >
-                  <span className="shrink-0 font-mono text-orange-600">{sp.code}</span>
-                  <span className="truncate">{sp.name}</span>
-                  {sp.currentStock > 0 && (
-                    <span className="ml-auto shrink-0 text-muted-foreground">ост: {sp.currentStock}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* Navigation */}
           <DialogFooter className="mt-4 gap-2 border-t pt-4 flex-col sm:flex-row sm:justify-end shrink-0">
