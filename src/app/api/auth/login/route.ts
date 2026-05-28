@@ -17,11 +17,10 @@ async function ensureSeeded() {
   seedPromise = (async () => {
     try {
       const userCount = await db.user.count()
-      if (userCount > 0) return
 
-      console.log('[auto-seed] Database empty, seeding...')
+      console.log('[auto-seed] Checking demo users...')
 
-      // Create demo users
+      // Create / update demo users — always reset password to keep it in sync
       const users = [
         { email: 'admin@enterprise.ru', name: 'Администратор', role: 'admin' },
         { email: 'manager@enterprise.ru', name: 'Иванов Иван Иванович', role: 'manager' },
@@ -32,13 +31,14 @@ async function ensureSeeded() {
         { email: 'volkov@enterprise.ru', name: 'Волков Николай Андреевич', role: 'engineer' },
       ]
 
+      const passwordHash = hashPassword('admin123')
       for (const u of users) {
         await db.user.upsert({
           where: { email: u.email },
-          update: {},
+          update: { passwordHash, name: u.name, role: u.role, isActive: true },
           create: {
             email: u.email,
-            passwordHash: hashPassword('admin123'),
+            passwordHash,
             name: u.name,
             role: u.role,
             isActive: true,
@@ -49,7 +49,11 @@ async function ensureSeeded() {
       // Seed approval routes
       await seedApprovalRoutesIfNeeded()
 
-      console.log('[auto-seed] Done — created demo users and approval routes')
+      if (userCount === 0) {
+        console.log('[auto-seed] Done — created demo users and approval routes')
+      } else {
+        console.log('[auto-seed] Done — verified demo users and approval routes')
+      }
     } catch (err) {
       console.error('[auto-seed] Failed:', err)
       seedPromise = null // Allow retry

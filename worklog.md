@@ -271,6 +271,27 @@ Stage Summary:
 - Lint clean (только предсуществующие ошибки в утилитарных файлах)
 - Dev server запускается корректно
 
+---
+Task ID: 1
+Agent: Main
+Task: Fix login bug — only admin account works, other accounts fail authentication
+
+Work Log:
+- Investigated all auth-related files: login API route, auth library, login form, auth store, schema
+- Verified all 7 users exist in database with isActive=true
+- Tested password verification for all users with 'admin123' — only admin verified, all others failed
+- Root cause: non-admin users had stale password hashes from previous seed runs that were not updated
+  - Auto-seed in login/route.ts used `update: {}` (empty) in upsert, so existing users' passwords were never updated
+  - Seed only ran when userCount === 0, so once ANY user existed, no new users or password updates happened
+- Fixed: Reset all 7 demo users' passwordHash to correctly hashed 'admin123' via direct DB update
+- Fixed: Changed auto-seed logic to always upsert with `update: { passwordHash, name, role, isActive: true }` so passwords are kept in sync on every login
+- Verified: all 7 users now pass password verification with 'admin123'
+
+Stage Summary:
+- All 7 demo accounts now work with password 'admin123'
+- Auto-seed now updates existing users' passwords instead of skipping them
+- No more stale password issues on future deployments
+
 TODO (when sandbox stabilizes):
 - Проверить в UI: создание manufacturing-заявки без ОЗМ и оборудования
 - Потестировать полный сценарий: создание → согласование → выполнение
