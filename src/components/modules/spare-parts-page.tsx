@@ -1601,6 +1601,7 @@ function CreateZipRequestDialog({
   const [equipResults, setEquipResults] = useState<EquipmentItem[]>([])
   const [equipLoading, setEquipLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dialogContentRef = useRef<HTMLDivElement>(null)
   const [applicantName, setApplicantName] = useState('')
   const [applicantDepartmentId, setApplicantDepartmentId] = useState('')
   const [applicantDepartmentName, setApplicantDepartmentName] = useState('')
@@ -1695,12 +1696,22 @@ function CreateZipRequestDialog({
   const [spDropdownPos, setSpDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
   // Compute dropdown position from anchor element
+  // Note: DialogContent uses CSS transform (translate), so position: fixed
+  // children are relative to the dialog, not the viewport.
+  // We subtract the dialog's rect to get coordinates relative to the dialog.
   useEffect(() => {
     if (spSearchIdx !== null && spSearchResults.length > 0 && !spSearchLoading) {
       const anchor = spAnchorRefs.current[spSearchIdx]
-      if (anchor) {
-        const rect = anchor.getBoundingClientRect()
-        setSpDropdownPos({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 280) })
+      // Try ref first, fall back to querySelector for Radix dialog content
+      const dialog = dialogContentRef.current || document.querySelector('[data-slot="dialog-content"]') as HTMLElement | null
+      if (anchor && dialog) {
+        const anchorRect = anchor.getBoundingClientRect()
+        const dialogRect = dialog.getBoundingClientRect()
+        setSpDropdownPos({
+          top: anchorRect.bottom - dialogRect.top + 2,
+          left: anchorRect.left - dialogRect.left,
+          width: Math.max(anchorRect.width, 280)
+        })
       }
     } else {
       setSpDropdownPos(null)
@@ -2173,7 +2184,7 @@ function CreateZipRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-h-[90vh] flex flex-col sm:max-w-[680px] lg:max-w-[92vw] xl:max-w-[1100px] overflow-hidden">
+      <DialogContent ref={dialogContentRef} className="max-h-[90vh] flex flex-col sm:max-w-[680px] lg:max-w-[92vw] xl:max-w-[1100px] overflow-hidden">
         <div className="overflow-y-auto flex-1 min-h-0">
         <DialogHeader>
           <DialogTitle className="text-lg">{isEditMode ? `Редактировать заявку #${editRequest?.requestNumber}` : 'Создать потребность в ЗИП'}</DialogTitle>

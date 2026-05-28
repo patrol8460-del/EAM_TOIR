@@ -333,3 +333,23 @@ Stage Summary:
 - Drag-and-drop now works on file upload steps in both manufacturing and purchase scenarios
 - Manufacturing submit no longer throws "Каждая позиция должна содержать articleNumber" error
 - Server rebuilt and running on port 3000
+
+---
+Task ID: 1
+Agent: Main
+Task: Fix ОЗМ dropdown suggestions in procurement needs form (step 3)
+
+Work Log:
+- Diagnosed why the dropdown was not appearing when typing in the ОЗМ field
+- Found root cause: DialogContent uses CSS `translate-x-[-50%] translate-y-[-50%]` (transform), which makes `position: fixed` on child elements relative to the dialog, not the viewport
+- The `getBoundingClientRect()` returns viewport coordinates, but the dropdown was being positioned with viewport coordinates while `position: fixed` was relative to the dialog container
+- Fixed by adding a `dialogContentRef` ref to the DialogContent and computing dropdown position relative to the dialog: `top = anchorRect.bottom - dialogRect.top + 2`
+- Added fallback `document.querySelector('[data-slot="dialog-content"]')` in case the ref doesn't forward through Radix UI
+- The existing search logic already works: `handleSpSearch` triggers on `onFocus` and `onChange`, API call to `/api/spare-parts?search=...` with 300ms debounce, minimum 2 characters
+- Rebuilt and restarted the server
+
+Stage Summary:
+- Key fix: Dropdown position calculation now accounts for DialogContent's CSS transform
+- Added `dialogContentRef` to CreateZipRequestDialog's DialogContent
+- Modified the useEffect that computes `spDropdownPos` to subtract dialog rect from anchor rect
+- File modified: `src/components/modules/spare-parts-page.tsx`
