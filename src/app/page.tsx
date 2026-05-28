@@ -14,10 +14,28 @@ interface User {
 }
 
 export default function Home() {
-  // SSR-safe: always start with null (matches server prerender), load from localStorage in useEffect
   const [user, setUser] = useState<User | null>(null)
-
   const storeSetUser = useAuthStore((s) => s.setUser)
+
+  // Global fetch interceptor — always attach Bearer token for API calls
+  useEffect(() => {
+    const originalFetch = window.fetch
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url.startsWith('/api/')) {
+        const token = localStorage.getItem('session_token')
+        if (token) {
+          const headers = new Headers(init?.headers)
+          if (!headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer ${token}`)
+          }
+          return originalFetch(input, { ...init, headers, credentials: 'include' })
+        }
+      }
+      return originalFetch(input, init)
+    }
+    return () => { window.fetch = originalFetch }
+  }, [])
 
   // On mount: read localStorage and sync to zustand
   useEffect(() => {
@@ -33,34 +51,6 @@ export default function Home() {
     if (storedUser) {
       setUser(storedUser)
       storeSetUser(storedUser)
-
-      // Setup global fetch interceptor: attach Authorization header for API calls
-      const originalFetch = window.fetch
-      window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-        if (url.startsWith('/api/')) {
-          const token = localStorage.getItem('session_token')
-          if (token) {
-            const headers = new Headers(init?.headers)
-            if (!headers.has('Authorization')) {
-              headers.set('Authorization', `Bearer ${token}`)
-            }
-            return originalFetch(input, { ...init, headers, credentials: 'include' })
-          }
-        }
-        return originalFetch(input, init)
-      }
-
-      // Verify session in background
-      fetch('/api/auth/me').then(res => {
-        if (res.ok) return
-        localStorage.removeItem('session_token')
-        localStorage.removeItem('session_user')
-        localStorage.removeItem('login_email')
-        localStorage.removeItem('login_password')
-        setUser(null)
-        storeSetUser(null)
-      }).catch(() => { /* network error, keep local session */ })
     }
   }, [storeSetUser])
 
