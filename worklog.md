@@ -100,3 +100,38 @@ Stage Summary:
   - `src/app/error.tsx` — error boundary page
 - Dev server running on port 3000
 - Next session should: verify ОЗМ dropdown works in Preview Panel, test user feedback
+
+---
+Task ID: 4
+Agent: main + subagent
+Task: Add allocation tracking between consolidated demand table and procurement lots
+
+Work Log:
+- Analyzed data model: consolidated table groups ZipRequestItems by articleNumber; lots contain LotItems with articleNumber + quantity
+- Decided on NO schema changes — simply sum LotItem quantities from non-cancelled lots by articleNumber
+- Updated `/api/zip-requests/consolidated/route.ts`:
+  - Added query for all LotItems from non-cancelled lots (draft/submitted/ordered/completed)
+  - Built allocatedMap: articleNumber → total allocated qty
+  - Added `allocatedQuantity`, `remainingQuantity` to each consolidated item
+  - Added `totalDemand`, `totalRemaining`, `totalAllocated`, `fullyAllocated` to stats
+  - Sorted items: remaining > 0 first, fully allocated at bottom
+- Updated `src/components/modules/procurement-tab.tsx` (via subagent):
+  - Added `allocatedQuantity`, `remainingQuantity` to ConsolidatedItem interface
+  - Added new fields to ConsolidatedStats
+  - Added `allocationFilter` state with options: all/unallocated/fully_allocated/partial
+  - Updated stats cards: 5 cards showing totalItems, totalRemaining (with totalAllocated sub), totalDemand, totalValue, linkedToCatalog
+  - Updated ConsolidatedRow: new `isFullyAllocated` prop, opacity-50 for allocated rows, disabled checkbox, shows "в лотах: X"
+  - Updated table header: "Кол-во" → "Спрос / Ост."
+  - Updated selection: blocked for remainingQuantity <= 0, toggleAll only considers selectable rows
+  - Updated create lot dialog: pre-fills with remainingQuantity
+  - Added fetchConsolidated() after create/edit/delete lot operations
+- Lint passes with no new errors
+- Dev server returns HTTP 200
+
+Stage Summary:
+- No schema changes needed — allocation is computed on-the-fly from existing LotItem data
+- Creating a lot automatically reduces remaining quantities in consolidated table
+- Editing a lot (removing items, reducing qty) automatically returns quantities
+- Deleting/cancelling a lot automatically returns all quantities
+- Fully allocated items appear grayed out with line-through and disabled checkbox
+- Filter bar supports filtering by allocation status

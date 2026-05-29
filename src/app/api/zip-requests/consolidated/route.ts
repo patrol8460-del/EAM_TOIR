@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic'
  * GET /api/zip-requests/consolidated
  * 
  * Returns all items from approved (and ordered) zip requests, 
- * consolidated/summed by articleNumber (ОЗМ).
+ * consolidated/summed by articleNumber (ОЗМ), with allocated qty subtracted
+ * based on non-cancelled procurement lots.
  * 
  * Query params:
  *   search — filter by ОЗМ or name (contains)
@@ -29,12 +30,32 @@ export async function GET(request: NextRequest) {
     const hasSparePart = searchParams.get('hasSparePart') === 'true'
     const noSparePart = searchParams.get('noSparePart') === 'true'
 
-    // Build where clause for zip requests — only approved
+    // ── 1. Fetch allocated quantities from non-cancelled lots ──
+    const lotItems = await db.procurementLotItem.findMany({
+      where: {
+        procurementLot: {
+          status: { in: ['draft', 'submitted', 'ordered', 'completed'] },
+        },
+      },
+      select: {
+        articleNumber: true,
+        quantity: true,
+      },
+    })
+
+    const allocatedMap = new Map<string, number>()
+    for (const li of lotItems) {
+      const key = (li.articleNumber || '').trim().toLowerCase()
+      if (!key) continue
+      allocatedMap.set(key, (allocatedMap.get(key) || 0) + li.quantity)
+    }
+
+    // ── 2. Build where clause for zip requests — only approved ──
     const requestWhere: Record<string, unknown> = {
       status: { in: ['approved', 'ordered'] },
     }
 
-    // Fetch all items from matching requests with their request info
+    // ── 3. Fetch all items from matching requests ──
     const items = await db.zipRequestItem.findMany({
       where: {
         zipRequest: requestWhere,
@@ -84,7 +105,7 @@ export async function GET(request: NextRequest) {
       orderBy: { articleNumber: 'asc' },
     })
 
-    // Group by articleNumber (ОЗМ) — case-insensitive
+    // ── 4. Group by articleNumber (ОЗМ) — case-insensitive ──
     const grouped = new Map<string, {
       articleNumber: string
       names: Set<string>
@@ -146,11 +167,6 @@ export async function GET(request: NextRequest) {
       group.names.add(item.name)
       group.totalQuantity += item.quantity
 
-      // Use the best available price (prefer item-level price over catalog)
-      if (unitPrice != null && (group.unitPrice == null || unitPrice > group.unitPrice)) {
-        // keep the highest known price as reference
-      }
-
       group.sources.push({
         zipRequestId: req.id,
         zipRequestNumber: req.number,
@@ -172,14 +188,14 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Convert Map to array and compute totals
+    // ── 5. Convert Map to array with allocation info ──
     const consolidated = Array.from(grouped.values()).map((g) => {
-      // Pick the most descriptive name
       const nameArr = Array.from(g.names)
       const name = nameArr.sort((a, b) => b.length - a.length)[0] || ''
 
-      // Calculate total price
       const price = g.unitPrice ?? g.catalogPrice
+      const allocated = allocatedMap.get(g.articleNumber.trim().toLowerCase()) || 0
+      const remaining = Math.max(0, g.totalQuantity - allocated)
       const totalPrice = price != null ? price * g.totalQuantity : null
 
       return {
@@ -187,8 +203,10 @@ export async function GET(request: NextRequest) {
         name,
         unit: g.unit,
         totalQuantity: g.totalQuantity,
+        allocatedQuantity: allocated,
+        remainingQuantity: remaining,
         requestCount: g.sources.length,
-        unitPrice: g.unitPrice ?? g.catalogPrice,
+        unitPrice: price,
         totalPrice,
         sparePartId: g.sparePartId,
         sparePartCode: g.sparePartCode,
@@ -199,24 +217,34 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Sort by totalQuantity descending
-    consolidated.sort((a, b) => b.totalQuantity - a.totalQuantity)
+    // Sort by remainingQuantity descending (fully allocated go to bottom)
+    consolidated.sort((a, b) => {
+      if (a.remainingQuantity === 0 && b.remainingQuantity > 0) return 1
+      if (a.remainingQuantity > 0 && b.remainingQuantity === 0) return -1
+      return b.remainingQuantity - a.remainingQuantity
+    })
 
-    // Compute summary stats
+    // ── 6. Compute summary stats (using remaining quantities) ──
     const totalItems = consolidated.length
-    const totalQuantity = consolidated.reduce((s, c) => s + c.totalQuantity, 0)
+    const totalDemand = consolidated.reduce((s, c) => s + c.totalQuantity, 0)
+    const totalRemaining = consolidated.reduce((s, c) => s + c.remainingQuantity, 0)
+    const totalAllocated = consolidated.reduce((s, c) => s + c.allocatedQuantity, 0)
     const totalValue = consolidated.reduce((s, c) => s + (c.totalPrice || 0), 0)
     const linkedToCatalog = consolidated.filter((c) => c.sparePartId).length
     const notLinkedToCatalog = totalItems - linkedToCatalog
+    const fullyAllocated = consolidated.filter((c) => c.remainingQuantity === 0).length
 
     return NextResponse.json({
       consolidated,
       stats: {
         totalItems,
-        totalQuantity,
+        totalDemand,
+        totalRemaining,
+        totalAllocated,
         totalValue,
         linkedToCatalog,
         notLinkedToCatalog,
+        fullyAllocated,
       },
     })
   } catch (error) {

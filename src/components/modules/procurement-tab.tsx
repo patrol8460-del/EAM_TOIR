@@ -97,6 +97,8 @@ interface ConsolidatedItem {
   requestCount: number
   unitPrice: number
   totalPrice: number
+  allocatedQuantity: number
+  remainingQuantity: number
   sparePartId: string | null
   sparePartCode: string | null
   sparePartName: string | null
@@ -111,6 +113,10 @@ interface ConsolidatedStats {
   totalValue: number
   linkedToCatalog: number
   notLinkedToCatalog: number
+  totalDemand: number
+  totalRemaining: number
+  totalAllocated: number
+  fullyAllocated: number
 }
 
 interface ConsolidatedResponse {
@@ -207,11 +213,16 @@ export default function ProcurementTab() {
     totalValue: 0,
     linkedToCatalog: 0,
     notLinkedToCatalog: 0,
+    totalDemand: 0,
+    totalRemaining: 0,
+    totalAllocated: 0,
+    fullyAllocated: 0,
   })
   const [consolidatedLoading, setConsolidatedLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [departmentFilter, setDepartmentFilter] = useState('all')
   const [catalogFilter, setCatalogFilter] = useState<'all' | 'linked' | 'not_linked'>('all')
+  const [allocationFilter, setAllocationFilter] = useState<'all' | 'unallocated' | 'fully_allocated' | 'partial'>('all')
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
@@ -289,9 +300,13 @@ export default function ProcurementTab() {
       // Catalog link filter
       if (catalogFilter === 'linked' && !item.sparePartId) return false
       if (catalogFilter === 'not_linked' && item.sparePartId) return false
+      // Allocation filter
+      if (allocationFilter === 'unallocated' && item.remainingQuantity <= 0) return false
+      if (allocationFilter === 'fully_allocated' && item.remainingQuantity !== 0) return false
+      if (allocationFilter === 'partial' && (item.allocatedQuantity <= 0 || item.remainingQuantity <= 0)) return false
       return true
     })
-  }, [consolidatedData, search, departmentFilter, catalogFilter])
+  }, [consolidatedData, search, departmentFilter, catalogFilter, allocationFilter])
 
   // ─── Selection summary ─────────────────────────────────────────────────────
 
@@ -301,7 +316,7 @@ export default function ProcurementTab() {
     for (const id of selectedRows) {
       const item = consolidatedData.find((c) => c.articleNumber === id)
       if (item) {
-        totalQty += item.totalQuantity
+        totalQty += item.remainingQuantity
         totalValue += item.totalPrice
       }
     }
@@ -320,7 +335,7 @@ export default function ProcurementTab() {
       if (res.ok) {
         const data: ConsolidatedResponse = await res.json()
         setConsolidatedData(data.consolidated || [])
-        setConsolidatedStats(data.stats || { totalItems: 0, totalQuantity: 0, totalValue: 0, linkedToCatalog: 0, notLinkedToCatalog: 0 })
+        setConsolidatedStats(data.stats || { totalItems: 0, totalQuantity: 0, totalValue: 0, linkedToCatalog: 0, notLinkedToCatalog: 0, totalDemand: 0, totalRemaining: 0, totalAllocated: 0, fullyAllocated: 0 })
       } else {
         toast.error('Не удалось загрузить сводную таблицу')
       }
@@ -372,6 +387,8 @@ export default function ProcurementTab() {
   // ─── Row selection ──────────────────────────────────────────────────────────
 
   const toggleRow = (articleNumber: string) => {
+    const item = consolidatedData.find((c) => c.articleNumber === articleNumber)
+    if (item && item.remainingQuantity <= 0) return
     setSelectedRows((prev) => {
       const next = new Set(prev)
       if (next.has(articleNumber)) next.delete(articleNumber)
@@ -380,11 +397,18 @@ export default function ProcurementTab() {
     })
   }
 
+  const selectableFiltered = useMemo(
+    () => filteredConsolidated.filter((c) => c.remainingQuantity > 0),
+    [filteredConsolidated],
+  )
+
   const toggleAll = () => {
-    if (selectedRows.size === filteredConsolidated.length && filteredConsolidated.length > 0) {
+    const selectableIds = new Set(selectableFiltered.map((c) => c.articleNumber))
+    const allSelected = selectableFiltered.length > 0 && selectableFiltered.every((c) => selectedRows.has(c.articleNumber))
+    if (allSelected) {
       setSelectedRows(new Set())
     } else {
-      setSelectedRows(new Set(filteredConsolidated.map((c) => c.articleNumber)))
+      setSelectedRows(selectableIds)
     }
   }
 
@@ -410,7 +434,7 @@ export default function ProcurementTab() {
         articleNumber: c.articleNumber,
         name: c.name,
         unit: c.unit,
-        quantity: c.totalQuantity,
+        quantity: c.remainingQuantity,
         unitPrice: c.unitPrice || null,
         notes: '',
         sources: c.sources,
@@ -461,6 +485,7 @@ export default function ProcurementTab() {
         setCreateItems([])
         clearSelection()
         fetchLots()
+        fetchConsolidated()
       } else {
         const data = await res.json()
         toast.error(data.error || 'Ошибка при создании лота')
@@ -600,6 +625,7 @@ export default function ProcurementTab() {
         setEditDialogOpen(false)
         setEditLotId(null)
         fetchLots()
+        fetchConsolidated()
         if (detailDialogOpen && detailLot?.id === editLotId) {
           const detailRes = await fetch(`/api/procurement/lots/${editLotId}`)
           if (detailRes.ok) {
@@ -655,6 +681,7 @@ export default function ProcurementTab() {
           setDetailLot(null)
         }
         fetchLots()
+        fetchConsolidated()
       } else {
         const data = await res.json()
         toast.error(data.error || 'Ошибка при удалении лота')
@@ -692,8 +719,9 @@ export default function ProcurementTab() {
   // ─── Stats cards ───────────────────────────────────────────────────────────
 
   const statsCards = [
-    { title: 'Позиций', value: consolidatedStats.totalItems, icon: Package, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { title: 'Общее кол-во', value: consolidatedStats.totalQuantity, icon: Layers, color: 'text-sky-600', bg: 'bg-sky-50' },
+    { title: 'Всего позиций', value: consolidatedStats.totalItems, icon: Package, color: 'text-orange-600', bg: 'bg-orange-50' },
+    { title: 'Остаток (не распределено)', value: consolidatedStats.totalRemaining, icon: Layers, color: 'text-sky-600', bg: 'bg-sky-50', subValue: consolidatedStats.totalAllocated, subLabel: 'в лотах' },
+    { title: 'Общая потребность', value: consolidatedStats.totalDemand, icon: ClipboardPaste, color: 'text-violet-600', bg: 'bg-violet-50' },
     { title: 'Общая стоимость', value: consolidatedStats.totalValue, icon: ShoppingCart, color: 'text-emerald-600', bg: 'bg-emerald-50', format: true },
     { title: 'В каталоге', value: consolidatedStats.linkedToCatalog, icon: CheckCircle2, color: 'text-teal-600', bg: 'bg-teal-50', subValue: consolidatedStats.notLinkedToCatalog, subLabel: 'не привязано' },
   ]
@@ -742,7 +770,7 @@ export default function ProcurementTab() {
         {/* ──────────────────────────────────────────────────────────────────── */}
         <TabsContent value="consolidated" className="space-y-6">
           {/* Stats cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             {statsCards.map((stat) => {
               const Icon = stat.icon
               return (
@@ -804,6 +832,17 @@ export default function ProcurementTab() {
                   <SelectItem value="not_linked">Без привязки</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={allocationFilter} onValueChange={(v) => setAllocationFilter(v as typeof allocationFilter)}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Распределение" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все</SelectItem>
+                  <SelectItem value="unallocated">Не распределено</SelectItem>
+                  <SelectItem value="fully_allocated">Полностью в лотах</SelectItem>
+                  <SelectItem value="partial">Частично</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -816,7 +855,7 @@ export default function ProcurementTab() {
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="pl-6 w-10">
                         <Checkbox
-                          checked={filteredConsolidated.length > 0 && selectedRows.size === filteredConsolidated.length}
+                          checked={selectableFiltered.length > 0 && selectableFiltered.every((c) => selectedRows.has(c.articleNumber))}
                           onCheckedChange={toggleAll}
                         />
                       </TableHead>
@@ -824,7 +863,7 @@ export default function ProcurementTab() {
                       <TableHead>ОЗМ</TableHead>
                       <TableHead>Наименование</TableHead>
                       <TableHead className="text-center">Ед.</TableHead>
-                      <TableHead className="text-right">Кол-во</TableHead>
+                      <TableHead className="text-right">Спрос / Ост.</TableHead>
                       <TableHead className="text-center">Заявок</TableHead>
                       <TableHead className="text-right">Цена за ед.</TableHead>
                       <TableHead className="text-right">Сумма</TableHead>
@@ -850,7 +889,7 @@ export default function ProcurementTab() {
                           <div className="flex flex-col items-center gap-3">
                             <Package className="size-12 text-muted-foreground/40" />
                             <p className="text-muted-foreground text-sm max-w-md">
-                              {search || departmentFilter !== 'all' || catalogFilter !== 'all'
+                              {search || departmentFilter !== 'all' || catalogFilter !== 'all' || allocationFilter !== 'all'
                                 ? 'Позиции по заданным фильтрам не найдены.'
                                 : 'Нет одобренных заявок для формирования закупочной потребности.'}
                             </p>
@@ -862,6 +901,7 @@ export default function ProcurementTab() {
                         const isExpanded = expandedRows.has(item.articleNumber)
                         const isSelected = selectedRows.has(item.articleNumber)
                         const isLowStock = item.currentStock != null && item.currentStock < item.totalQuantity
+                        const isFullyAllocated = item.remainingQuantity === 0
 
                         return (
                           <ConsolidatedRow
@@ -870,6 +910,7 @@ export default function ProcurementTab() {
                             isExpanded={isExpanded}
                             isSelected={isSelected}
                             isLowStock={isLowStock}
+                            isFullyAllocated={isFullyAllocated}
                             onToggleExpand={() => toggleExpand(item.articleNumber)}
                             onToggleSelect={() => toggleRow(item.articleNumber)}
                           />
@@ -1441,6 +1482,7 @@ function ConsolidatedRow({
   isExpanded,
   isSelected,
   isLowStock,
+  isFullyAllocated,
   onToggleExpand,
   onToggleSelect,
 }: {
@@ -1448,16 +1490,23 @@ function ConsolidatedRow({
   isExpanded: boolean
   isSelected: boolean
   isLowStock: boolean
+  isFullyAllocated: boolean
   onToggleExpand: () => void
   onToggleSelect: () => void
 }) {
   return (
     <>
       <TableRow
-        className={isSelected ? 'bg-orange-50/50' : ''}
+        className={
+          isFullyAllocated
+            ? 'opacity-50'
+            : isSelected
+              ? 'bg-orange-50/50'
+              : ''
+        }
       >
         <TableCell className="pl-6">
-          <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} />
+          <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} disabled={isFullyAllocated} />
         </TableCell>
         <TableCell>
           <Button variant="ghost" size="icon" className="size-7" onClick={onToggleExpand}>
@@ -1473,7 +1522,16 @@ function ConsolidatedRow({
           {item.name}
         </TableCell>
         <TableCell className="text-sm text-center">{item.unit}</TableCell>
-        <TableCell className="text-sm text-right font-bold">{item.totalQuantity}</TableCell>
+        <TableCell className="text-sm text-right">
+          <div className={isFullyAllocated ? 'line-through' : ''}>
+            <span className="text-muted-foreground">{item.totalQuantity}</span>
+            <span className="text-muted-foreground"> / </span>
+            <span className="font-bold">{item.remainingQuantity}</span>
+          </div>
+          {item.allocatedQuantity > 0 && (
+            <p className="text-xs text-muted-foreground mt-0.5">в лотах: {item.allocatedQuantity}</p>
+          )}
+        </TableCell>
         <TableCell className="text-center">
           <Badge variant="secondary" className="text-xs">
             {item.requestCount}
