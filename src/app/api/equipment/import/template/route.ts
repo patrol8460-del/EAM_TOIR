@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
+import { getSessionUser } from '@/lib/auth'
 
 /**
  * GET /api/equipment/import/template
@@ -8,8 +9,8 @@ import * as XLSX from 'xlsx'
  */
 export async function GET(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get('session_token')?.value
-    if (!sessionToken) {
+    const user = await getSessionUser(request)
+    if (!user || !user.isActive) {
       return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
     }
 

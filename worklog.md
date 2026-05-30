@@ -135,3 +135,33 @@ Stage Summary:
 - Deleting/cancelling a lot automatically returns all quantities
 - Fully allocated items appear grayed out with line-through and disabled checkbox
 - Filter bar supports filtering by allocation status
+
+---
+Task ID: 5
+Agent: main
+Task: Seed database with 30 ОЗМ, departments, 4 approved zip requests; fix equipment import and blank page
+
+Work Log:
+- Diagnosed blank page: Next.js 16 Turbopack build does not copy .next/static to .next/standalone/.next/static — all JS/CSS/font assets returned 500
+- Fixed .zscripts/dev.sh: added mkdir -p + cp -r for static, public, xlsx module, .env file
+- Created prisma/seed.ts: idempotent seed script (checks before inserting):
+  - 3 departments: Механическая служба, Электроцех, Участок КИПиА
+  - 30 spare parts (ОЗМ): подшипники, манжеты, ремни, насосное оборудование, электродвигатели, датчики, трубопроводная арматура, масла, ремкомплекты, метизы
+  - 4 approved zip requests with items and approval actions:
+    - ЗН-2025-001: Годовая потребность в подшипниках (6 items)
+    - ЗН-2025-002: Срочная закупка запчастей для насосов (3 items)
+    - ЗН-2025-003: Пополнение склада расходников (8 items)
+    - ЗН-2025-004: Изготовление валов по чертежам (2 items, manufacturing type)
+- Fixed equipment import template auth: replaced manual cookie check with getSessionUser() helper
+- Fixed equipment import file parsing: changed XLSX.readFile(tmpPath) → XLSX.read(buffer, {type:'buffer'}) to avoid "Cannot access file" error in standalone
+- Fixed ArrayBuffer → Buffer conversion: Buffer.from(new Uint8Array(arrayBuffer)) for Node 24 compatibility
+- Added seed to dev.sh pipeline (after db:push, before build)
+- Added xlsx package copy to standalone node_modules in dev.sh
+
+Stage Summary:
+- prisma/seed.ts is the permanent seed source — runs on every dev.sh start, idempotent
+- 30 ОЗМ with realistic industrial data, prices, stock levels
+- 4 approved zip requests with 19 items total and 9 approval actions
+- 3 departments for zip request applicant department linking
+- Equipment import: template download and file upload both working
+- .zscripts/dev.sh updated: static copy, xlsx copy, .env copy, seed step

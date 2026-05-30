@@ -263,8 +263,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Save file to temp location
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(new Uint8Array(arrayBuffer))
     const tmpPath = join('/tmp', `import_${randomUUID()}.${ext}`)
     await writeFile(tmpPath, buffer)
 
@@ -273,9 +273,16 @@ export async function POST(request: NextRequest) {
     let errors = 0
     const errorDetails: string[] = []
 
+    // Parse from buffer instead of file (avoids xlsx file access issues in standalone)
+    let workbook: ReturnType<typeof XLSX.read>
     try {
-      // Parse the file
-      const workbook = XLSX.readFile(tmpPath)
+      workbook = XLSX.read(buffer, { type: 'buffer' })
+    } catch (readErr) {
+      return NextResponse.json({ error: 'Ошибка чтения файла: неверный формат' }, { status: 400 })
+    }
+
+    try {
+      // Verify we got sheets
       const sheetName = workbook.SheetNames[0]
       if (!sheetName) {
         return NextResponse.json({ error: 'Файл не содержит листов' }, { status: 400 })
