@@ -66,6 +66,31 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
+import { SortableFilterableTable, type ColDef } from '@/components/shared/sortable-filterable-table'
+import {
+  DndContext as ProcDndContext,
+  MouseSensor as ProcMouseSensor,
+  TouchSensor as ProcTouchSensor,
+  useSensor as ProcUseSensor,
+  useSensors as ProcUseSensors,
+  closestCenter as ProcClosestCenter,
+  type DragEndEvent as ProcDragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext as ProcSortableContext,
+  useSortable as ProcUseSortable,
+  arrayMove as ProcArrayMove,
+  horizontalListSortingStrategy as ProcHorizontalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS as ProcCSS } from '@dnd-kit/utilities'
+import {
+  ChevronDown as ProcChevronDown,
+  ChevronUp as ProcChevronUp,
+  ChevronsUpDown as ProcChevronsUpDown,
+  CheckCircle2 as ProcCheckCircle2,
+  GripVertical as ProcGripVertical,
+  X as ProcX,
+} from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -104,6 +129,7 @@ interface ConsolidatedItem {
   sparePartName: string | null
   currentStock: number
   catalogPrice: number | null
+  procurementGroup: string | null
   sources: SourceItem[]
 }
 
@@ -201,7 +227,147 @@ function LotStatusBadge({ status }: { status: string }) {
   )
 }
 
+// ─── Consolidated Column Definitions for SortableFilterableTable ──
+
+const CONSOLIDATED_COLUMNS: ColDef<ConsolidatedItem>[] = [
+  { key: 'articleNumber', label: 'ОЗМ', group: 'Основное', render: (item) => <span className="font-mono text-sm font-medium">{item.articleNumber}</span> },
+  { key: 'name', label: 'Наименование', group: 'Основное', render: (item) => <span className="text-sm max-w-[200px] truncate" title={item.name}>{item.name}</span> },
+  { key: 'procurementGroup', label: 'Гр. закупок', group: 'Основное', render: (item) => <span className="text-sm text-muted-foreground">{item.procurementGroup || '\u2014'}</span> },
+  { key: 'unit', label: 'Ед.', group: 'Основное', render: (item) => <span className="text-sm text-center">{item.unit}</span> },
+  { key: 'demand', label: 'Спрос / Ост.', group: 'Спрос', render: (item) => (
+    <div className="text-sm text-right">
+      <div className={item.remainingQuantity === 0 ? 'line-through' : ''}>
+        <span className="text-muted-foreground">{item.totalQuantity}</span>
+        <span className="text-muted-foreground"> / </span>
+        <span className="font-bold">{item.remainingQuantity}</span>
+      </div>
+      {item.allocatedQuantity > 0 && <p className="text-xs text-muted-foreground mt-0.5">в лотах: {item.allocatedQuantity}</p>}
+    </div>
+  )},
+  { key: 'requestCount', label: 'Заявок', group: 'Спрос', render: (item) => <Badge variant="secondary" className="text-xs">{item.requestCount}</Badge> },
+  { key: 'unitPrice', label: 'Цена за ед.', group: 'Финансы', render: (item) => <span className="text-sm text-right">{formatPrice(item.unitPrice || null)}</span> },
+  { key: 'totalPrice', label: 'Сумма', group: 'Финансы', render: (item) => <span className="text-sm text-right font-medium">{formatPrice(item.totalPrice)}</span> },
+  { key: 'currentStock', label: 'На складе', group: 'Склад', render: (item) => {
+    const isLow = item.currentStock != null && item.currentStock < item.totalQuantity
+    return isLow ? (
+      <span className="flex items-center justify-end gap-1 text-amber-600"><AlertTriangle className="size-3.5" />{item.currentStock}</span>
+    ) : <span className="text-muted-foreground">{item.currentStock ?? '\u2014'}</span>
+  }},
+]
+
+const CONSOLIDATED_DEFAULT_COLUMNS = ['articleNumber', 'name', 'procurementGroup', 'unit', 'demand', 'requestCount', 'unitPrice', 'totalPrice', 'currentStock']
+
+function consolidatedCellText(item: ConsolidatedItem, colKey: string): string {
+  try {
+    if (colKey === 'articleNumber') return item.articleNumber || ''
+    if (colKey === 'name') return item.name || ''
+    if (colKey === 'procurementGroup') return item.procurementGroup || ''
+    if (colKey === 'unit') return item.unit || ''
+    if (colKey === 'demand') return `${item.totalQuantity} / ${item.remainingQuantity}`
+    if (colKey === 'requestCount') return String(item.requestCount)
+    if (colKey === 'unitPrice') return item.unitPrice != null ? String(item.unitPrice) : ''
+    if (colKey === 'totalPrice') return item.totalPrice != null ? String(item.totalPrice) : ''
+    if (colKey === 'currentStock') return item.currentStock != null ? String(item.currentStock) : ''
+    return ''
+  } catch { return '' }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
+
+// ─── ProcSortableHeader (dnd-kit sortable column header for procurement) ──
+
+function ProcSortableHeader({
+  col,
+  sortKey,
+  sortDir,
+  colFilters,
+  openColMenu,
+  setOpenColMenu,
+  setSortDirection,
+  clearFilter,
+  toggleFilterValue,
+  columnUniqueValues,
+  items,
+  cellText,
+  colMenuRef,
+}: {
+  col: ColDef<ConsolidatedItem>
+  sortKey: string | null
+  sortDir: 'asc' | 'desc' | null
+  colFilters: Record<string, Set<string>>
+  openColMenu: string | null
+  setOpenColMenu: (key: string | null) => void
+  setSortDirection: (key: string, dir: 'asc' | 'desc') => void
+  clearFilter: (key: string) => void
+  toggleFilterValue: (key: string, val: string) => void
+  columnUniqueValues: Record<string, string[]>
+  items: ConsolidatedItem[]
+  cellText: (item: ConsolidatedItem, colKey: string) => string
+  colMenuRef: React.RefObject<HTMLDivElement | null>
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = ProcUseSortable({ id: col.key })
+  const isSorted = sortKey === col.key
+  const hasFilter = colFilters[col.key] && colFilters[col.key].size > 0
+  const isOpen = openColMenu === col.key
+  const style: React.CSSProperties = {
+    transform: ProcCSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 50 : undefined,
+    position: isDragging ? 'relative' : undefined,
+  }
+  return (
+    <th ref={setNodeRef} data-col-key={col.key} className={`text-foreground h-10 px-2 text-left align-middle font-medium text-xs whitespace-nowrap relative select-none ${isDragging ? 'bg-orange-50 shadow-md' : ''}`} style={style}>
+      <div ref={isOpen ? colMenuRef : undefined} className="flex items-center">
+        <div className="cursor-grab active:cursor-grabbing px-0.5 -ml-0.5 shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors touch-none" {...attributes} {...listeners} title="Перетащить">
+          <ProcGripVertical className="size-3.5" />
+        </div>
+        <button className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer group" onClick={(e) => { e.stopPropagation(); setOpenColMenu(isOpen ? null : col.key) }}>
+          <span className={isSorted ? 'font-semibold text-foreground' : 'text-muted-foreground group-hover:text-foreground'}>{col.label}</span>
+          {isSorted && sortDir === 'asc' && <ProcChevronDown className="size-3 text-orange-600" />}
+          {isSorted && sortDir === 'desc' && <ProcChevronUp className="size-3 text-orange-600" />}
+          {!isSorted && <ProcChevronsUpDown className="size-3 text-muted-foreground/40 group-hover:text-muted-foreground/60" />}
+          {hasFilter && <span className="size-1.5 rounded-full bg-orange-500 shrink-0" />}
+        </button>
+        {isOpen && (
+          <div className="absolute top-full left-0 z-50 mt-1 w-52 bg-popover text-popover-foreground rounded-md border shadow-lg flex flex-col overflow-hidden" style={{ maxHeight: 'min(420px, calc(100vh - 100px))' }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Сортировка</div>
+            <button className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-xs hover:bg-muted/80 transition-colors shrink-0 ${isSorted && sortDir === 'asc' ? 'bg-orange-50 text-orange-700' : ''}`} onClick={() => setSortDirection(col.key, 'asc')}>
+              <ProcChevronDown className="size-3" /> По возрастанию {isSorted && sortDir === 'asc' && <ProcCheckCircle2 className="size-3 ml-auto text-orange-600" />}
+            </button>
+            <button className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-xs hover:bg-muted/80 transition-colors shrink-0 ${isSorted && sortDir === 'desc' ? 'bg-orange-50 text-orange-700' : ''}`} onClick={() => setSortDirection(col.key, 'desc')}>
+              <ProcChevronUp className="size-3" /> По убыванию {isSorted && sortDir === 'desc' && <ProcCheckCircle2 className="size-3 ml-auto text-orange-600" />}
+            </button>
+            {(() => {
+              const uvals = columnUniqueValues[col.key] || []
+              if (uvals.length === 0) return null
+              return (
+                <>
+                  <div className="border-t shrink-0" />
+                  <div className="flex items-center justify-between px-2 pt-1 pb-0.5 shrink-0">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Фильтр</span>
+                    {hasFilter && <button className="text-[10px] text-orange-600 hover:text-orange-700 font-medium" onClick={() => clearFilter(col.key)}>Сбросить</button>}
+                  </div>
+                  <div className="min-h-0 overflow-y-auto custom-scrollbar px-1 pb-1">
+                    {uvals.map((val) => {
+                      const checked = colFilters[col.key]?.has(val) || false
+                      return (
+                        <label key={val} className="flex items-center gap-1.5 px-1.5 py-[3px] rounded text-[11px] hover:bg-muted/60 cursor-pointer transition-colors">
+                          <input type="checkbox" checked={checked} onChange={() => toggleFilterValue(col.key, val)} className="size-3 shrink-0 rounded border-muted-foreground/30 accent-orange-600" />
+                          <span className="truncate flex-1 min-w-0">{val}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        )}
+      </div>
+    </th>
+  )
+}
 
 export default function ProcurementTab() {
 
@@ -225,6 +391,108 @@ export default function ProcurementTab() {
   const [allocationFilter, setAllocationFilter] = useState<'all' | 'unallocated' | 'fully_allocated' | 'partial'>('all')
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  // ── Column DnD, sort & filter state ──
+  const [procVisibleColumns, setProcVisibleColumns] = useState<string[]>(CONSOLIDATED_DEFAULT_COLUMNS)
+  const [procSortKey, setProcSortKey] = useState<string | null>(null)
+  const [procSortDir, setProcSortDir] = useState<'asc' | 'desc' | null>(null)
+  const [procColFilters, setProcColFilters] = useState<Record<string, Set<string>>>({})
+  const [procOpenColMenu, setProcOpenColMenu] = useState<string | null>(null)
+  const procColMenuRef = useRef<HTMLDivElement>(null)
+
+  // Load column order from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('procurement-consolidated-columns')
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[]
+        if (Array.isArray(parsed) && parsed.length > 0) setProcVisibleColumns(parsed)
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  const columnSensors = ProcUseSensors(
+    ProcUseSensor(ProcMouseSensor, { activationConstraint: { distance: 5 } }),
+    ProcUseSensor(ProcTouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  )
+
+  const handleColumnDragEnd = useCallback((event: ProcDragEndEvent) => {
+    const { active, over } = event
+    setProcOpenColMenu(null)
+    if (!over || active.id === over.id) return
+    setProcVisibleColumns((prev) => {
+      const oldIdx = prev.indexOf(active.id as string)
+      const newIdx = prev.indexOf(over.id as string)
+      if (oldIdx === -1 || newIdx === -1) return prev
+      const arr = ProcArrayMove(prev, oldIdx, newIdx)
+      try { localStorage.setItem('procurement-consolidated-columns', JSON.stringify(arr)) } catch { /* ignore */ }
+      return arr
+    })
+    toast.success('Столбец перемещён')
+  }, [])
+
+  const setProcSortDirection = useCallback((key: string, dir: 'asc' | 'desc') => { setProcSortKey(key); setProcSortDir(dir) }, [])
+  const procClearFilter = useCallback((colKey: string) => { setProcColFilters((prev) => { const { [colKey]: _, ...rest } = prev; return rest }) }, [])
+  const procToggleFilterValue = useCallback((colKey: string, value: string) => {
+    setProcColFilters((prev) => {
+      const existing = prev[colKey]
+      if (!existing) return { ...prev, [colKey]: new Set([value]) }
+      const next = new Set(existing)
+      if (next.has(value)) next.delete(value); else next.add(value)
+      if (next.size === 0) { const { [colKey]: _, ...rest } = prev; return rest }
+      return { ...prev, [colKey]: next }
+    })
+  }, [])
+
+  // Close column menu on outside click
+  useEffect(() => {
+    if (!procOpenColMenu) return
+    const handler = (e: MouseEvent) => { if (procColMenuRef.current && !procColMenuRef.current.contains(e.target as Node)) setProcOpenColMenu(null) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [procOpenColMenu])
+
+  // Active columns in order
+  const procActiveColumns = useMemo(() => procVisibleColumns.map((key) => CONSOLIDATED_COLUMNS.find((c) => c.key === key)).filter(Boolean) as ColDef<ConsolidatedItem>[], [procVisibleColumns])
+
+  // Compute unique values per column
+  const procColumnUniqueValues = useMemo(() => {
+    try {
+      const map: Record<string, string[]> = {}
+      procActiveColumns.forEach((col) => {
+        const vals = new Set<string>()
+        filteredConsolidated.forEach((item) => { const t = consolidatedCellText(item, col.key); if (t) vals.add(t) })
+        map[col.key] = Array.from(vals).sort((a, b) => a.localeCompare(b, 'ru'))
+      })
+      return map
+    } catch { return {} }
+  }, [filteredConsolidated, procActiveColumns])
+
+  // Apply sort + filter to filteredConsolidated
+  const procDisplayItems = useMemo(() => {
+    try {
+      let result = [...filteredConsolidated]
+      const filterKeys = Object.keys(procColFilters)
+      if (filterKeys.length > 0) {
+        result = result.filter((item) => filterKeys.every((fk) => {
+          const allowed = procColFilters[fk]
+          if (!allowed || allowed.size === 0) return true
+          const t = consolidatedCellText(item, fk)
+          if (!t) return allowed.has('')
+          return allowed.has(t)
+        }))
+      }
+      if (procSortKey && procSortDir) {
+        result.sort((a, b) => {
+          const va = consolidatedCellText(a, procSortKey)
+          const vb = consolidatedCellText(b, procSortKey)
+          const cmp = va.localeCompare(vb, 'ru', { numeric: true, sensitivity: 'base' })
+          return procSortDir === 'asc' ? cmp : -cmp
+        })
+      }
+      return result
+    } catch { return [...filteredConsolidated] }
+  }, [filteredConsolidated, procSortKey, procSortDir, procColFilters])
 
   // ── Lots state ──
   const [lots, setLots] = useState<ProcurementLot[]>([])
@@ -850,7 +1118,13 @@ export default function ProcurementTab() {
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
+                <DndContext
+                  sensors={columnSensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleColumnDragEnd}
+                >
                 <Table>
+                  <SortableContext items={procActiveColumns.map(c => c.key)} strategy={horizontalListSortingStrategy}>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="pl-6 w-10">
@@ -860,36 +1134,47 @@ export default function ProcurementTab() {
                         />
                       </TableHead>
                       <TableHead className="w-8"></TableHead>
-                      <TableHead>ОЗМ</TableHead>
-                      <TableHead>Наименование</TableHead>
-                      <TableHead className="text-center">Ед.</TableHead>
-                      <TableHead className="text-right">Спрос / Ост.</TableHead>
-                      <TableHead className="text-center">Заявок</TableHead>
-                      <TableHead className="text-right">Цена за ед.</TableHead>
-                      <TableHead className="text-right">Сумма</TableHead>
+                      {procActiveColumns.map((col) => (
+                        <ProcSortableHeader
+                          key={col.key}
+                          col={col}
+                          sortKey={procSortKey}
+                          sortDir={procSortDir}
+                          colFilters={procColFilters}
+                          openColMenu={procOpenColMenu}
+                          setOpenColMenu={setProcOpenColMenu}
+                          setSortDirection={setProcSortDirection}
+                          clearFilter={procClearFilter}
+                          toggleFilterValue={procToggleFilterValue}
+                          columnUniqueValues={procColumnUniqueValues}
+                          items={filteredConsolidated}
+                          cellText={consolidatedCellText}
+                          colMenuRef={procColMenuRef}
+                        />
+                      ))}
                       <TableHead className="text-right pr-6">На складе</TableHead>
                     </TableRow>
                   </TableHeader>
+                  </SortableContext>
                   <TableBody>
                     {consolidatedLoading ? (
                       Array.from({ length: 6 }).map((_, i) => (
                         <TableRow key={i}>
                           <TableCell className="pl-6"><Skeleton className="h-4 w-4" /></TableCell>
                           <TableCell><Skeleton className="h-4 w-4" /></TableCell>
-                          {Array.from({ length: 8 }).map((_, j) => (
-                            <TableCell key={j} className={j === 7 ? 'pr-6 text-right' : ''}>
-                              <Skeleton className="h-5 w-20" />
-                            </TableCell>
+                          {procActiveColumns.map((_, j) => (
+                            <TableCell key={j}><Skeleton className="h-5 w-20" /></TableCell>
                           ))}
+                          <TableCell className="pr-6 text-right"><Skeleton className="h-5 w-16" /></TableCell>
                         </TableRow>
                       ))
-                    ) : filteredConsolidated.length === 0 ? (
+                    ) : procDisplayItems.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="h-64 text-center">
+                        <TableCell colSpan={procActiveColumns.length + 3} className="h-64 text-center">
                           <div className="flex flex-col items-center gap-3">
                             <Package className="size-12 text-muted-foreground/40" />
                             <p className="text-muted-foreground text-sm max-w-md">
-                              {search || departmentFilter !== 'all' || catalogFilter !== 'all' || allocationFilter !== 'all'
+                              {search || departmentFilter !== 'all' || catalogFilter !== 'all' || allocationFilter !== 'all' || Object.keys(procColFilters).length > 0
                                 ? 'Позиции по заданным фильтрам не найдены.'
                                 : 'Нет одобренных заявок для формирования закупочной потребности.'}
                             </p>
@@ -897,7 +1182,7 @@ export default function ProcurementTab() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredConsolidated.map((item) => {
+                      procDisplayItems.map((item) => {
                         const isExpanded = expandedRows.has(item.articleNumber)
                         const isSelected = selectedRows.has(item.articleNumber)
                         const isLowStock = item.currentStock != null && item.currentStock < item.totalQuantity
@@ -913,12 +1198,14 @@ export default function ProcurementTab() {
                             isFullyAllocated={isFullyAllocated}
                             onToggleExpand={() => toggleExpand(item.articleNumber)}
                             onToggleSelect={() => toggleRow(item.articleNumber)}
+                            visibleColumns={procActiveColumns}
                           />
                         )
                       })
                     )}
                   </TableBody>
                 </Table>
+                </DndContext>
               </div>
             </CardContent>
           </Card>
@@ -1485,6 +1772,7 @@ function ConsolidatedRow({
   isFullyAllocated,
   onToggleExpand,
   onToggleSelect,
+  visibleColumns,
 }: {
   item: ConsolidatedItem
   isExpanded: boolean
@@ -1493,104 +1781,46 @@ function ConsolidatedRow({
   isFullyAllocated: boolean
   onToggleExpand: () => void
   onToggleSelect: () => void
+  visibleColumns: ColDef<ConsolidatedItem>[]
 }) {
+  const renderCell = (k: string) => {
+    if (k === 'articleNumber') return <TableCell key={k} className="font-mono text-sm font-medium">{item.articleNumber}</TableCell>
+    if (k === 'name') return <TableCell key={k} className="text-sm max-w-[200px] truncate" title={item.name}>{item.name}</TableCell>
+    if (k === 'procurementGroup') return <TableCell key={k} className="text-sm text-muted-foreground">{item.procurementGroup || '\u2014'}</TableCell>
+    if (k === 'unit') return <TableCell key={k} className="text-sm text-center">{item.unit}</TableCell>
+    if (k === 'demand') return <TableCell key={k} className="text-sm text-right"><div className={isFullyAllocated ? 'line-through' : ''}><span className="text-muted-foreground">{item.totalQuantity}</span><span className="text-muted-foreground"> / </span><span className="font-bold">{item.remainingQuantity}</span></div>{item.allocatedQuantity > 0 && <p className="text-xs text-muted-foreground mt-0.5">в лотах: {item.allocatedQuantity}</p>}</TableCell>
+    if (k === 'requestCount') return <TableCell key={k} className="text-center"><Badge variant="secondary" className="text-xs">{item.requestCount}</Badge></TableCell>
+    if (k === 'unitPrice') return <TableCell key={k} className="text-sm text-right">{formatPrice(item.unitPrice || null)}</TableCell>
+    if (k === 'totalPrice') return <TableCell key={k} className="text-sm text-right font-medium">{formatPrice(item.totalPrice)}</TableCell>
+    if (k === 'currentStock') return <TableCell key={k} className="text-sm text-right pr-6">{isLowStock ? <span className="flex items-center justify-end gap-1 text-amber-600"><AlertTriangle className="size-3.5" />{item.currentStock}</span> : <span className="text-muted-foreground">{item.currentStock ?? '\u2014'}</span>}</TableCell>
+    return <TableCell key={k}>{visibleColumns.find(c => c.key === k)?.render(item)}</TableCell>
+  }
   return (
     <>
-      <TableRow
-        className={
-          isFullyAllocated
-            ? 'opacity-50'
-            : isSelected
-              ? 'bg-orange-50/50'
-              : ''
-        }
-      >
+      <TableRow className={isFullyAllocated ? 'opacity-50' : isSelected ? 'bg-orange-50/50' : ''}>
         <TableCell className="pl-6">
           <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} disabled={isFullyAllocated} />
         </TableCell>
         <TableCell>
           <Button variant="ghost" size="icon" className="size-7" onClick={onToggleExpand}>
-            {isExpanded ? (
-              <ChevronDown className="size-4" />
-            ) : (
-              <ChevronRight className="size-4" />
-            )}
+            {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
           </Button>
         </TableCell>
-        <TableCell className="font-mono text-sm font-medium">{item.articleNumber}</TableCell>
-        <TableCell className="text-sm max-w-[200px] truncate" title={item.name}>
-          {item.name}
-        </TableCell>
-        <TableCell className="text-sm text-center">{item.unit}</TableCell>
-        <TableCell className="text-sm text-right">
-          <div className={isFullyAllocated ? 'line-through' : ''}>
-            <span className="text-muted-foreground">{item.totalQuantity}</span>
-            <span className="text-muted-foreground"> / </span>
-            <span className="font-bold">{item.remainingQuantity}</span>
-          </div>
-          {item.allocatedQuantity > 0 && (
-            <p className="text-xs text-muted-foreground mt-0.5">в лотах: {item.allocatedQuantity}</p>
-          )}
-        </TableCell>
-        <TableCell className="text-center">
-          <Badge variant="secondary" className="text-xs">
-            {item.requestCount}
-          </Badge>
-        </TableCell>
-        <TableCell className="text-sm text-right">{formatPrice(item.unitPrice || null)}</TableCell>
-        <TableCell className="text-sm text-right font-medium">{formatPrice(item.totalPrice)}</TableCell>
-        <TableCell className="text-sm text-right pr-6">
-          {isLowStock ? (
-            <span className="flex items-center justify-end gap-1 text-amber-600">
-              <AlertTriangle className="size-3.5" />
-              {item.currentStock}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">{item.currentStock ?? '—'}</span>
-          )}
-        </TableCell>
+        {visibleColumns.map((col) => renderCell(col.key))}
       </TableRow>
 
       {/* Expanded sources */}
-      {isExpanded &&
-        item.sources.map((src) => (
-          <TableRow key={src.zipRequestId + src.itemId} className="bg-muted/30">
-            <TableCell />
-            <TableCell />
-            <TableCell colSpan={1} className="py-2">
-              <span className="text-xs font-mono text-orange-600">{src.zipRequestNumber}</span>
-            </TableCell>
-            <TableCell colSpan={2} className="text-xs text-muted-foreground py-2">
-              <span>{src.applicantName}</span>
-              {src.departmentName && (
-                <span className="ml-2">· {src.departmentName}</span>
-              )}
-            </TableCell>
-            <TableCell className="text-xs text-right font-medium py-2">{src.quantity} {src.unit}</TableCell>
-            <TableCell className="text-center py-2">
-              <Badge
-                variant="outline"
-                className={
-                  src.zipRequestPriority === 'critical'
-                    ? 'bg-red-100 text-red-700 border-red-200 text-[10px]'
-                    : src.zipRequestPriority === 'emergency'
-                      ? 'bg-red-100 text-red-700 border-red-200 text-[10px]'
-                      : src.zipRequestPriority === 'additional'
-                        ? 'bg-amber-100 text-amber-700 border-amber-200 text-[10px]'
-                        : 'bg-slate-100 text-slate-600 border-slate-200 text-[10px]'
-                }
-              >
-                {PRIORITY_LABELS[src.zipRequestPriority] || src.zipRequestPriority}
-              </Badge>
-            </TableCell>
-            <TableCell className="text-xs text-right text-muted-foreground py-2">
-              {formatPrice(src.unitPrice || null)}
-            </TableCell>
-            <TableCell className="text-xs text-right text-muted-foreground py-2" colSpan={2}>
-              {src.zipRequestNeededBy ? formatDate(src.zipRequestNeededBy) : '—'}
-            </TableCell>
-          </TableRow>
-        ))}
+      {isExpanded && item.sources.map((src) => (
+        <TableRow key={src.zipRequestId + src.itemId} className="bg-muted/30">
+          <TableCell /><TableCell />
+          <TableCell colSpan={visibleColumns.length} className="py-2">
+            <span className="text-xs font-mono text-orange-600">{src.zipRequestNumber}</span>
+            <span className="text-xs text-muted-foreground ml-2">{src.applicantName}{src.departmentName ? ` \xb7 ${src.departmentName}` : ''}</span>
+            <span className="text-xs font-medium ml-2">{src.quantity} {src.unit}</span>
+            <span className="text-xs text-muted-foreground ml-2">{src.zipRequestNeededBy ? formatDate(src.zipRequestNeededBy) : ''}</span>
+          </TableCell>
+        </TableRow>
+      ))}
     </>
   )
 }

@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
             unit: true,
             currentStock: true,
             price: true,
+            procurementGroup: true,
           },
         },
       },
@@ -118,6 +119,7 @@ export async function GET(request: NextRequest) {
       sparePartName: string | null
       currentStock: number | null
       catalogPrice: number | null
+      procurementGroup: string | null
       sources: Array<{
         zipRequestId: string
         zipRequestNumber: string
@@ -159,6 +161,7 @@ export async function GET(request: NextRequest) {
           sparePartName: item.sparePart?.name || null,
           currentStock: item.sparePart?.currentStock ?? null,
           catalogPrice: item.sparePart?.price ?? null,
+          procurementGroup: item.sparePart?.procurementGroup ?? null,
           sources: [],
         })
       }
@@ -213,6 +216,7 @@ export async function GET(request: NextRequest) {
         sparePartName: g.sparePartName,
         currentStock: g.currentStock,
         catalogPrice: g.catalogPrice,
+        procurementGroup: g.procurementGroup,
         sources: g.sources,
       }
     })

@@ -100,6 +100,7 @@ import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth-store'
 import { useAppStore } from '@/store/app-store'
 import ProcurementTab from '@/components/modules/procurement-tab'
+import { SortableFilterableTable, type ColDef } from '@/components/shared/sortable-filterable-table'
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -114,6 +115,7 @@ interface SparePartItem {
   currentStock: number
   price: number | null
   description: string | null
+  procurementGroup: string | null
   category: { id: string; name: string; code: string } | null
 }
 
@@ -313,6 +315,45 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// CATALOG TAB — Column definitions for sortable/filterable table
+// ═══════════════════════════════════════════════════════════════
+
+const CATALOG_COLUMNS: ColDef<SparePartItem>[] = [
+  { key: 'code', label: 'ОЗМ', group: 'Основное', render: (item) => <span className="font-mono text-sm font-medium">{item.code}</span> },
+  { key: 'name', label: 'Наименование', group: 'Основное', render: (item) => (
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-medium">{item.name}</span>
+      {item.currentStock <= item.minStock && <AlertTriangle className="size-3.5 shrink-0 text-red-500" />}
+    </div>
+  )},
+  { key: 'category', label: 'Категория', group: 'Основное', render: (item) => <span className="text-sm text-muted-foreground">{item.category?.name || '—'}</span> },
+  { key: 'procurementGroup', label: 'Группа закупок', group: 'Основное', render: (item) => <span className="text-sm text-muted-foreground">{item.procurementGroup || '—'}</span> },
+  { key: 'currentStock', label: 'Остаток', group: 'Склад', render: (item) => {
+    const isLow = item.currentStock <= item.minStock
+    return <span className={`text-right font-medium ${isLow ? 'text-red-600' : ''}`}>{item.currentStock}</span>
+  }},
+  { key: 'minStock', label: 'Мин. остаток', group: 'Склад', render: (item) => <span className="text-right text-muted-foreground">{item.minStock}</span> },
+  { key: 'unit', label: 'Ед. изм.', group: 'Склад', render: (item) => <span className="text-sm">{item.unit}</span> },
+  { key: 'price', label: 'Цена', group: 'Финансы', render: (item) => <span className="text-right text-sm">{item.price ? `${item.price.toLocaleString('ru-RU')} ₽` : '—'}</span> },
+]
+
+const CATALOG_DEFAULT_COLUMNS = ['code', 'name', 'category', 'procurementGroup', 'currentStock', 'minStock', 'unit', 'price']
+
+function catalogCellText(item: SparePartItem, colKey: string): string {
+  try {
+    if (colKey === 'code') return item.code || ''
+    if (colKey === 'name') return item.name || ''
+    if (colKey === 'category') return item.category?.name || ''
+    if (colKey === 'procurementGroup') return item.procurementGroup || ''
+    if (colKey === 'currentStock') return String(item.currentStock ?? '')
+    if (colKey === 'minStock') return String(item.minStock ?? '')
+    if (colKey === 'unit') return item.unit || ''
+    if (colKey === 'price') return item.price != null ? String(item.price) : ''
+    return ''
+  } catch { return '' }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CATALOG TAB (existing spare parts CRUD — preserved)
 // ═══════════════════════════════════════════════════════════════
 
@@ -325,6 +366,7 @@ const emptySparePartForm = {
   currentStock: '0',
   price: '',
   description: '',
+  procurementGroup: '',
 }
 
 function CatalogTab() {
@@ -408,6 +450,7 @@ function CatalogTab() {
         currentStock: parseInt(form.currentStock) || 0,
         price: form.price ? parseFloat(form.price) : null,
         categoryId: form.categoryId || null,
+        procurementGroup: form.procurementGroup || null,
       }
       const res = await fetch('/api/spare-parts', {
         method: 'POST',
@@ -446,6 +489,7 @@ function CatalogTab() {
       currentStock: String(item.currentStock),
       price: item.price ? String(item.price) : '',
       description: item.description || '',
+      procurementGroup: item.procurementGroup || '',
     })
     setEditDialogOpen(true)
   }
@@ -467,6 +511,7 @@ function CatalogTab() {
         currentStock: parseInt(editForm.currentStock) || 0,
         price: editForm.price ? parseFloat(editForm.price) : null,
         description: editForm.description || null,
+        procurementGroup: editForm.procurementGroup || null,
       }
       const res = await fetch('/api/spare-parts', {
         method: 'PUT',
@@ -642,6 +687,21 @@ function CatalogTab() {
                     />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Группа закупок</Label>
+                    <Select value={form.procurementGroup} onValueChange={(v) => updateField('procurementGroup', v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 20 }, (_, i) => `А${i + 1}`).map((g) => (
+                          <SelectItem key={g} value={g}>{g}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="sp-min">Мин. остаток</Label>
@@ -723,97 +783,40 @@ function CatalogTab() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-6">ОЗМ</TableHead>
-                <TableHead>Наименование</TableHead>
-                <TableHead>Категория</TableHead>
-                <TableHead className="text-right">Остаток</TableHead>
-                <TableHead className="text-right">Мин. остаток</TableHead>
-                <TableHead>Ед. изм.</TableHead>
-                <TableHead className="text-right">Цена</TableHead>
-                <TableHead className="pr-6 text-right">Действия</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <TableCell
-                        key={j}
-                        className={j === 0 ? 'pl-6' : j === 7 ? 'pr-6 text-right' : ''}
-                      >
-                        <Skeleton className="h-5 w-20" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : items.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-64 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <FileSpreadsheet className="size-12 text-muted-foreground/40" />
-                      <p className="max-w-md text-sm text-muted-foreground">
-                        {search
-                          ? 'Запчасти по запросу не найдены.'
-                          : 'Запасные части пока не добавлены. Нажмите кнопку «Добавить» или «Импорт» для начала работы.'}
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                items.map((item) => {
-                  const isLow = item.currentStock <= item.minStock
-                  return (
-                    <TableRow key={item.id} className={isLow ? 'bg-red-50/50' : ''}>
-                      <TableCell className="pl-6 font-mono text-sm font-medium">
-                        {item.code}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{item.name}</span>
-                          {isLow && <AlertTriangle className="size-3.5 shrink-0 text-red-500" />}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {item.category?.name || '—'}
-                      </TableCell>
-                      <TableCell className={`text-right font-medium ${isLow ? 'text-red-600' : ''}`}>
-                        {item.currentStock}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">{item.minStock}</TableCell>
-                      <TableCell className="text-sm">{item.unit}</TableCell>
-                      <TableCell className="text-right text-sm">
-                        {item.price ? `${item.price.toLocaleString('ru-RU')} ₽` : '—'}
-                      </TableCell>
-                      <TableCell className="pr-6 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-8">
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem className="gap-2" onClick={() => handleEditOpen(item)}>
-                              <Pencil className="size-4" /> Редактировать
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="gap-2 text-destructive"
-                              onClick={() => handleDeleteOpen(item)}
-                            >
-                              <Trash2 className="size-4" /> Удалить
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
+          <SortableFilterableTable<SparePartItem>
+            columns={CATALOG_COLUMNS}
+            defaultVisibleColumns={CATALOG_DEFAULT_COLUMNS}
+            items={items}
+            loading={loading}
+            itemKey="id"
+            cellText={catalogCellText}
+            storageKey="spare-parts-catalog-columns"
+            emptyMessage="Запасные части пока не добавлены. Нажмите кнопку «Добавить» или «Импорт» для начала работы."
+            filteredEmptyMessage="Запчасти по заданным фильтрам не найдены."
+            hasActiveFilters={!!search}
+            rowClassName={(item) => item.currentStock <= item.minStock ? 'bg-red-50/50' : ''}
+            trailingColumnHeader="Действия"
+            trailingColumn={(item) => (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem className="gap-2" onClick={() => handleEditOpen(item)}>
+                    <Pencil className="size-4" /> Редактировать
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2 text-destructive"
+                    onClick={() => handleDeleteOpen(item)}
+                  >
+                    <Trash2 className="size-4" /> Удалить
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          />
         </CardContent>
       </Card>
 
@@ -879,6 +882,21 @@ function CatalogTab() {
                   value={editForm.unit}
                   onChange={(e) => setEditForm((p) => ({ ...p, unit: e.target.value }))}
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Группа закупок</Label>
+                <Select value={editForm.procurementGroup} onValueChange={(v) => setEditForm((p) => ({ ...p, procurementGroup: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 20 }, (_, i) => `А${i + 1}`).map((g) => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -2891,6 +2909,45 @@ function CreateZipRequestDialog({
 // ZIP REQUESTS TAB
 // ═══════════════════════════════════════════════════════════════
 
+const ZIP_REQUEST_COLUMNS: ColDef<ZipRequest>[] = [
+  { key: 'requestNumber', label: 'Номер', group: 'Основное', render: (r) => <span className="font-mono text-xs font-medium">#{r.requestNumber}</span> },
+  { key: 'type', label: 'Тип', group: 'Основное', render: (r) => <span className="text-xs text-muted-foreground">{TYPE_LABELS[r.type]}</span> },
+  { key: 'title', label: 'Название', group: 'Основное', render: (r) => <span className="text-sm font-medium line-clamp-1">{r.title}</span> },
+  { key: 'equipmentName', label: 'Оборудование', group: 'Основное', render: (r) => <span className="text-xs text-muted-foreground max-w-[150px] truncate">{r.equipmentName || '\u2014'}</span> },
+  { key: 'priority', label: 'Приоритет', group: 'Основное', render: (r) => <Badge variant="outline" className={`text-xs ${PRIORITY_COLORS[r.priority]}`}>{PRIORITY_LABELS[r.priority]}</Badge> },
+  { key: 'status', label: 'Статус', group: 'Основное', render: (r) => (
+    <div>
+      <Badge variant="outline" className={`text-xs ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge>
+      {r.status === 'pending_approval' && r.approvalActions && r.approvalActions.length > 0 && (
+        <div className="flex items-center gap-1 mt-1">
+          {r.approvalActions.map((action, idx) => (
+            <div key={action.id || idx} className={`w-2 h-2 rounded-full ${action.action === 'approved' ? 'bg-emerald-500' : action.action === 'rejected' ? 'bg-red-500' : action.action === 'skipped' ? 'bg-gray-300' : 'bg-amber-400 animate-pulse'}`} title={`${action.position || ''}: ${action.action === 'approved' ? 'Согласовано' : action.action === 'rejected' ? 'Отклонено' : action.action === 'skipped' ? 'Пропущен' : 'Ожидает'}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  )},
+  { key: 'createdAt', label: 'Дата', group: 'Основное', render: (r) => <span className="text-xs text-muted-foreground">{formatDate(r.createdAt)}</span> },
+  { key: 'authorName', label: 'Автор', group: 'Основное', render: (r) => <span className="text-xs text-muted-foreground max-w-[120px] truncate">{r.authorName}</span> },
+  { key: 'applicantName', label: 'Заявитель', group: 'Основное', render: (r) => <span className="text-xs text-muted-foreground max-w-[120px] truncate">{r.applicantName || '\u2014'}</span> },
+]
+const ZIP_REQUEST_DEFAULT_COLUMNS = ['requestNumber', 'type', 'title', 'equipmentName', 'priority', 'status', 'createdAt', 'authorName', 'applicantName']
+
+function zipRequestCellText(r: ZipRequest, colKey: string): string {
+  try {
+    if (colKey === 'requestNumber') return r.requestNumber || ''
+    if (colKey === 'type') return TYPE_LABELS[r.type] || r.type
+    if (colKey === 'title') return r.title || ''
+    if (colKey === 'equipmentName') return r.equipmentName || ''
+    if (colKey === 'priority') return PRIORITY_LABELS[r.priority] || r.priority
+    if (colKey === 'status') return STATUS_LABELS[r.status] || r.status
+    if (colKey === 'createdAt') return formatDate(r.createdAt)
+    if (colKey === 'authorName') return r.authorName || ''
+    if (colKey === 'applicantName') return r.applicantName || ''
+    return ''
+  } catch { return '' }
+}
+
 function ZipRequestsTab() {
   const [loading, setLoading] = useState(true)
   const [requests, setRequests] = useState<ZipRequest[]>([])
@@ -3154,148 +3211,37 @@ function ZipRequestsTab() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-6">Номер</TableHead>
-                  <TableHead>Тип</TableHead>
-                  <TableHead>Название</TableHead>
-                  <TableHead className="hidden lg:table-cell">Оборудование</TableHead>
-                  <TableHead>Приоритет</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead className="hidden md:table-cell">Дата</TableHead>
-                  <TableHead className="hidden sm:table-cell">Автор</TableHead>
-                  <TableHead className="hidden lg:table-cell">Заявитель</TableHead>
-                  <TableHead className="pr-6 text-right">Действия</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 6 }).map((_, i) => (
-                    <TableRow key={i}>
-                      {Array.from({ length: 10 }).map((_, j) => (
-                        <TableCell
-                          key={j}
-                          className={j === 0 ? 'pl-6' : j === 9 ? 'pr-6 text-right' : ''}
-                        >
-                          <Skeleton className="h-5 w-16" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : requests.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="h-64 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <FileSpreadsheet className="size-12 text-muted-foreground/40" />
-                        <p className="max-w-md text-sm text-muted-foreground">
-                          {search || typeFilter || statusFilter
-                            ? 'Заявки по заданным фильтрам не найдены.'
-                            : 'Заявки пока не созданы. Нажмите «Создать потребность» для начала работы.'}
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  requests.map((req) => (
-                    <TableRow
-                      key={req.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => openDetail(req.id)}
-                    >
-                      <TableCell className="pl-6 font-mono text-xs font-medium">
-                        #{req.requestNumber}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {TYPE_LABELS[req.type]}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm font-medium line-clamp-1">{req.title}</span>
-                      </TableCell>
-                      <TableCell className="hidden text-xs text-muted-foreground lg:table-cell max-w-[150px] truncate">
-                        {req.equipmentName || '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs ${PRIORITY_COLORS[req.priority]}`}
-                        >
-                          {PRIORITY_LABELS[req.priority]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`text-xs ${STATUS_COLORS[req.status]}`}>
-                          {STATUS_LABELS[req.status]}
-                        </Badge>
-                        {req.status === 'pending_approval' && req.approvalActions && req.approvalActions.length > 0 && (
-                          <div className="flex items-center gap-1 mt-1">
-                            {req.approvalActions.map((action, idx) => (
-                              <div
-                                key={action.id || idx}
-                                className={`w-2 h-2 rounded-full ${
-                                  action.action === 'approved'
-                                    ? 'bg-emerald-500'
-                                    : action.action === 'rejected'
-                                      ? 'bg-red-500'
-                                      : action.action === 'skipped'
-                                        ? 'bg-gray-300'
-                                        : 'bg-amber-400 animate-pulse'
-                                }`}
-                                title={`${action.position || ''}: ${action.action === 'approved' ? 'Согласовано' : action.action === 'rejected' ? 'Отклонено' : action.action === 'skipped' ? 'Пропущен' : 'Ожидает'}`}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                        {formatDate(req.createdAt)}
-                      </TableCell>
-                      <TableCell className="hidden text-xs text-muted-foreground sm:table-cell max-w-[120px] truncate">
-                        {req.authorName}
-                      </TableCell>
-                      <TableCell className="hidden text-xs text-muted-foreground lg:table-cell max-w-[120px] truncate">
-                        {req.applicantName || '—'}
-                      </TableCell>
-                      <TableCell className="pr-6" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            title="Просмотр"
-                            onClick={() => openDetail(req.id)}
-                          >
-                            <Eye className="size-4" />
-                          </Button>
-                          {(req.status === 'draft' || req.status === 'rejected') && user?.id === req.authorId && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8"
-                              title="Редактировать"
-                              onClick={() => openEditDialog(req)}
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
-                          )}
-                          {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && user?.id === req.authorId && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 text-destructive hover:text-destructive"
-                              title="Удалить"
-                              onClick={() => openDeleteDialog(req)}
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+            <SortableFilterableTable<ZipRequest>
+              columns={ZIP_REQUEST_COLUMNS}
+              defaultVisibleColumns={ZIP_REQUEST_DEFAULT_COLUMNS}
+              items={requests}
+              loading={loading}
+              itemKey="id"
+              cellText={zipRequestCellText}
+              storageKey="spare-parts-requests-columns"
+              emptyMessage="Заявки пока не созданы. Нажмите «Создать потребность» для начала работы."
+              filteredEmptyMessage="Заявки по заданным фильтрам не найдены."
+              hasActiveFilters={!!search || !!typeFilter || !!statusFilter}
+              onRowClick={(req) => openDetail(req.id)}
+              trailingColumnHeader="Действия"
+              trailingColumn={(req) => (
+                <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" className="size-8" title="Просмотр" onClick={() => openDetail(req.id)}>
+                    <Eye className="size-4" />
+                  </Button>
+                  {(req.status === 'draft' || req.status === 'rejected') && user?.id === req.authorId && (
+                    <Button variant="ghost" size="icon" className="size-8" title="Редактировать" onClick={() => openEditDialog(req)}>
+                      <Pencil className="size-4" />
+                    </Button>
+                  )}
+                  {(req.status === 'draft' || req.status === 'cancelled' || req.status === 'rejected') && user?.id === req.authorId && (
+                    <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" title="Удалить" onClick={() => openDeleteDialog(req)}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
+            />
           </div>
 
           {/* Pagination */}

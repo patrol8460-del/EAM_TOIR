@@ -116,7 +116,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { id, name, code, categoryId, unit, minStock, currentStock, price, description } = body
+    const { id, name, code, categoryId, unit, minStock, currentStock, price, description, procurementGroup } = body
 
     if (!id) {
       return NextResponse.json({ error: 'ID запчасти обязателен' }, { status: 400 })
@@ -148,6 +148,7 @@ export async function PUT(request: NextRequest) {
         currentStock: currentStock ?? 0,
         price: price ?? null,
         description: description || null,
+        procurementGroup: procurementGroup || null,
       },
       include: {
         category: { select: { name: true, code: true } },

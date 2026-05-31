@@ -54,6 +54,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { SortableFilterableTable, type ColDef } from '@/components/shared/sortable-filterable-table'
 
 interface MaintenanceTask {
   id: string
@@ -127,6 +128,40 @@ const emptyCreateForm = {
   planName: '',
   intervalDays: '',
   description: '',
+}
+
+const PLAN_COLUMNS: ColDef<MaintenancePlan>[] = [
+  { key: 'equipment', label: 'Оборудование', group: 'Основное', render: (p) => (
+    <div>
+      <p className="font-medium text-sm">{p.equipment?.name || p.planName}</p>
+      <p className="text-xs text-muted-foreground">{p.equipment?.code}</p>
+    </div>
+  )},
+  { key: 'lastMaintenance', label: 'Последний ремонт', group: 'Даты', render: (p) => <span className="text-sm text-muted-foreground">{formatDate(p.lastMaintenance)}</span> },
+  { key: 'nextMaintenance', label: 'Следующий ремонт', group: 'Даты', render: (p) => {
+    const daysUntil = getDaysUntil(p.nextMaintenance)
+    const isOverdue = daysUntil < 0
+    const isDueSoon = daysUntil >= 0 && daysUntil <= 14
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm">{formatDate(p.nextMaintenance)}</span>
+        {isOverdue && <Badge variant="destructive" className="text-xs">Просрочено</Badge>}
+        {!isOverdue && isDueSoon && <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 border-amber-200">Скоро</Badge>}
+      </div>
+    )
+  }},
+  { key: 'intervalDays', label: 'Интервал (дни)', group: 'Основное', render: (p) => <span className="text-right text-sm">{p.intervalDays}</span> },
+  { key: 'status', label: 'Статус', group: 'Основное', render: (p) => <PlanStatusBadge status={p.status} /> },
+]
+const PLAN_DEFAULT_COLUMNS = ['equipment', 'lastMaintenance', 'nextMaintenance', 'intervalDays', 'status']
+
+function planCellText(p: MaintenancePlan, colKey: string): string {
+  if (colKey === 'equipment') return p.equipment?.name || p.planName || ''
+  if (colKey === 'lastMaintenance') return formatDate(p.lastMaintenance)
+  if (colKey === 'nextMaintenance') return formatDate(p.nextMaintenance)
+  if (colKey === 'intervalDays') return String(p.intervalDays)
+  if (colKey === 'status') { const m: Record<string,string> = { active: 'Активен', paused: 'Приостановлен', completed: 'Завершён' }; return m[p.status] || p.status }
+  return ''
 }
 
 export default function PlanningPage() {
@@ -520,89 +555,35 @@ export default function PlanningPage() {
           <CardDescription>Список всех плановых ремонтов с указанием интервалов и статусов</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-6">Оборудование</TableHead>
-                <TableHead>Последний ремонт</TableHead>
-                <TableHead>Следующий ремонт</TableHead>
-                <TableHead className="text-right">Интервал (дни)</TableHead>
-                <TableHead>Статус</TableHead>
-                <TableHead className="pr-6 text-right">Действия</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 6 }).map((_, j) => (
-                      <TableCell key={j} className={j === 0 ? 'pl-6' : j === 5 ? 'pr-6 text-right' : ''}>
-                        <Skeleton className="h-5 w-24" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : plans.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <FileText className="size-12 text-muted-foreground/40" />
-                      <p className="text-muted-foreground text-sm max-w-md">
-                        Планы ППР ещё не созданы. Нажмите кнопку «Создать план ППР» для добавления.
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                plans.map((plan) => {
-                  const daysUntil = getDaysUntil(plan.nextMaintenance)
-                  const isOverdue = daysUntil < 0
-                  const isDueSoon = daysUntil >= 0 && daysUntil <= 14
-
-                  return (
-                    <TableRow key={plan.id} className={isOverdue ? 'bg-red-50/50' : isDueSoon ? 'bg-amber-50/50' : ''}>
-                      <TableCell className="pl-6">
-                        <div>
-                          <p className="font-medium text-sm">{plan.equipment?.name || plan.planName}</p>
-                          <p className="text-xs text-muted-foreground">{plan.equipment?.code}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(plan.lastMaintenance)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">{formatDate(plan.nextMaintenance)}</span>
-                          {isOverdue && (
-                            <Badge variant="destructive" className="text-xs">Просрочено</Badge>
-                          )}
-                          {!isOverdue && isDueSoon && (
-                            <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 border-amber-200">Скоро</Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right text-sm">{plan.intervalDays}</TableCell>
-                      <TableCell><PlanStatusBadge status={plan.status} /></TableCell>
-                      <TableCell className="pr-6 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-8">
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="gap-2" onClick={() => handleViewPlan(plan)}>
-                              <Eye className="size-4" /> Просмотр
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
+          <SortableFilterableTable<MaintenancePlan>
+            columns={PLAN_COLUMNS}
+            defaultVisibleColumns={PLAN_DEFAULT_COLUMNS}
+            items={plans}
+            loading={loading}
+            itemKey="id"
+            cellText={planCellText}
+            storageKey="planning-plans-columns"
+            emptyMessage="Планы ППР ещё не созданы. Нажмите кнопку «Создать план ППР» для добавления."
+            rowClassName={(p) => {
+              const daysUntil = getDaysUntil(p.nextMaintenance)
+              return daysUntil < 0 ? 'bg-red-50/50' : daysUntil >= 0 && daysUntil <= 14 ? 'bg-amber-50/50' : ''
+            }}
+            trailingColumnHeader="Действия"
+            trailingColumn={(plan) => (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem className="gap-2" onClick={() => handleViewPlan(plan)}>
+                    <Eye className="size-4" /> Просмотр
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          />
         </CardContent>
       </Card>
 

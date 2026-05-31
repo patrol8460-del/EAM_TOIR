@@ -71,6 +71,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
+import { SortableFilterableTable, type ColDef } from '@/components/shared/sortable-filterable-table'
 
 interface RequestItem {
   id: string
@@ -138,6 +139,37 @@ const statusOptions = [
   { value: 'completed', label: 'Завершена' },
   { value: 'cancelled', label: 'Отменена' },
 ]
+
+const REQUEST_COLUMNS: ColDef<RequestItem>[] = [
+  { key: 'number', label: 'Номер', group: 'Основное', render: (item) => <span className="font-mono text-sm font-medium">{item.number}</span> },
+  { key: 'createdAt', label: 'Дата', group: 'Основное', render: (item) => <span className="text-sm text-muted-foreground whitespace-nowrap">{formatDate(item.createdAt)}</span> },
+  { key: 'equipment', label: 'Оборудование', group: 'Основное', render: (item) => <span className="text-sm max-w-[150px] truncate" title={item.equipment ? `${item.equipment.code} \u2014 ${item.equipment.name}` : ''}>{item.equipment ? item.equipment.code : '\u2014'}</span> },
+  { key: 'title', label: 'Описание', group: 'Основное', render: (item) => <span className="text-sm max-w-[200px] truncate" title={item.description}>{item.title}</span> },
+  { key: 'priority', label: 'Приоритет', group: 'Основное', render: (item) => <PriorityBadge priority={item.priority} /> },
+  { key: 'status', label: 'Статус', group: 'Основное', render: (item) => <StatusBadge status={item.status} /> },
+  { key: 'assignee', label: 'Ответственный', group: 'Основное', render: (item) => <span className="text-sm">{item.assignee?.name || '\u2014'}</span> },
+]
+
+const REQUEST_DEFAULT_COLUMNS = ['number', 'createdAt', 'equipment', 'title', 'priority', 'status', 'assignee']
+
+function requestCellText(item: RequestItem, colKey: string): string {
+  try {
+    if (colKey === 'number') return item.number || ''
+    if (colKey === 'createdAt') return formatDate(item.createdAt)
+    if (colKey === 'equipment') return item.equipment?.code || ''
+    if (colKey === 'title') return item.title || ''
+    if (colKey === 'priority') {
+      const m: Record<string, string> = { critical: 'Критичный', high: 'Высокий', medium: 'Средний', low: 'Низкий' }
+      return m[item.priority] || item.priority
+    }
+    if (colKey === 'status') {
+      const m: Record<string, string> = { new: 'Новая', assigned: 'Назначена', in_progress: 'В работе', completed: 'Завершена', cancelled: 'Отменена' }
+      return m[item.status] || item.status
+    }
+    if (colKey === 'assignee') return item.assignee?.name || ''
+    return ''
+  } catch { return '' }
+}
 
 export default function RequestsPage() {
   const [search, setSearch] = useState('')
@@ -500,113 +532,60 @@ export default function RequestsPage() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-6">Номер</TableHead>
-                <TableHead>Дата</TableHead>
-                <TableHead>Оборудование</TableHead>
-                <TableHead>Описание</TableHead>
-                <TableHead>Приоритет</TableHead>
-                <TableHead>Статус</TableHead>
-                <TableHead>Ответственный</TableHead>
-                <TableHead className="pr-6 text-right">Действия</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <TableCell key={j} className={j === 0 ? 'pl-6' : j === 7 ? 'pr-6 text-right' : ''}>
-                        <Skeleton className="h-5 w-16" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : items.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-64 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <FileText className="size-12 text-muted-foreground/40" />
-                      <p className="text-muted-foreground text-sm max-w-md">
-                        {search || statusFilter !== 'all'
-                          ? 'Заявки по заданным фильтрам не найдены.'
-                          : 'Неплановые заявки пока не созданы. Нажмите кнопку «Создать заявку» для добавления.'}
-                      </p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="pl-6 font-mono text-sm font-medium">{item.number}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {formatDate(item.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-sm max-w-[150px] truncate">
-                      {item.equipment ? (
-                        <span title={`${item.equipment.code} — ${item.equipment.name}`}>
-                          {item.equipment.code}
-                        </span>
-                      ) : '—'}
-                    </TableCell>
-                    <TableCell className="text-sm max-w-[200px] truncate" title={item.description}>
-                      {item.title}
-                    </TableCell>
-                    <TableCell><PriorityBadge priority={item.priority} /></TableCell>
-                    <TableCell><StatusBadge status={item.status} /></TableCell>
-                    <TableCell className="text-sm">{item.assignee?.name || '—'}</TableCell>
-                    <TableCell className="pr-6 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8">
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
-                          {/* Action items */}
-                          <DropdownMenuItem className="gap-2" onClick={() => handleViewOpen(item)}>
-                            <Eye className="size-4" /> Просмотр
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2" onClick={() => handleEditOpen(item)}>
-                            <Pencil className="size-4" /> Редактировать
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2 text-destructive" onClick={() => handleDeleteOpen(item)}>
-                            <Trash2 className="size-4" /> Удалить
-                          </DropdownMenuItem>
-
-                          <DropdownMenuSeparator />
-
-                          {/* Status quick-change */}
-                          <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                            Изменить статус
-                          </DropdownMenuLabel>
-                          {statusOptions.map((s) => (
-                            <DropdownMenuItem
-                              key={s.value}
-                              className="gap-2"
-                              disabled={item.status === s.value || statusChanging === item.id}
-                              onClick={() => handleStatusChange(item.id, s.value)}
-                            >
-                              {statusChanging === item.id && s.value !== item.status ? (
-                                <Loader2 className="size-3.5 animate-spin" />
-                              ) : (
-                                <CircleDot className={`size-3.5 ${item.status === s.value ? 'opacity-100' : 'opacity-40'}`} />
-                              )}
-                              <span className={item.status === s.value ? 'font-medium' : ''}>
-                                {s.label}
-                              </span>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <SortableFilterableTable<RequestItem>
+            columns={REQUEST_COLUMNS}
+            defaultVisibleColumns={REQUEST_DEFAULT_COLUMNS}
+            items={items}
+            loading={loading}
+            itemKey="id"
+            cellText={requestCellText}
+            storageKey="requests-columns"
+            emptyMessage="Неплановые заявки пока не созданы. Нажмите кнопку «Создать заявку» для добавления."
+            filteredEmptyMessage="Заявки по заданным фильтрам не найдены."
+            hasActiveFilters={!!search || statusFilter !== 'all'}
+            trailingColumnHeader="Действия"
+            trailingColumn={(item) => (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuItem className="gap-2" onClick={() => handleViewOpen(item)}>
+                    <Eye className="size-4" /> Просмотр
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="gap-2" onClick={() => handleEditOpen(item)}>
+                    <Pencil className="size-4" /> Редактировать
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="gap-2 text-destructive" onClick={() => handleDeleteOpen(item)}>
+                    <Trash2 className="size-4" /> Удалить
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Изменить статус
+                  </DropdownMenuLabel>
+                  {statusOptions.map((s) => (
+                    <DropdownMenuItem
+                      key={s.value}
+                      className="gap-2"
+                      disabled={item.status === s.value || statusChanging === item.id}
+                      onClick={() => handleStatusChange(item.id, s.value)}
+                    >
+                      {statusChanging === item.id && s.value !== item.status ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <CircleDot className={`size-3.5 ${item.status === s.value ? 'opacity-100' : 'opacity-40'}`} />
+                      )}
+                      <span className={item.status === s.value ? 'font-medium' : ''}>
+                        {s.label}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          />
         </CardContent>
       </Card>
 

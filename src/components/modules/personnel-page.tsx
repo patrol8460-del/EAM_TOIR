@@ -14,6 +14,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { SortableFilterableTable, type ColDef } from '@/components/shared/sortable-filterable-table'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -194,6 +195,62 @@ const emptyForm: BrigadeFormData = {
   code: '',
   departmentId: '',
   description: '',
+}
+
+// ─── Column Definitions for SortableFilterableTable ──
+
+const BRIGADE_COLUMNS: ColDef<Brigade>[] = [
+  { key: 'code', label: 'Код', group: 'Основное', render: (b) => <span className="font-mono text-sm">{b.code}</span> },
+  { key: 'name', label: 'Название', group: 'Основное', render: (b) => <span className="font-medium">{b.name}</span> },
+  { key: 'department', label: 'Подразделение', group: 'Основное', render: (b) => <span className="text-sm text-muted-foreground">{b.department?.name || '\u2014'}</span> },
+  { key: 'foreman', label: 'Бригадир', group: 'Основное', render: (b) => <span className="text-sm">{b.foreman?.name || '\u2014'}</span> },
+  { key: 'membersCount', label: 'Кол-во человек', group: 'Основное', render: (b) => <Badge variant="secondary">{b.members.length}</Badge> },
+]
+const BRIGADE_DEFAULT_COLUMNS = ['code', 'name', 'department', 'foreman', 'membersCount']
+
+function brigadeCellText(b: Brigade, colKey: string): string {
+  if (colKey === 'code') return b.code || ''
+  if (colKey === 'name') return b.name || ''
+  if (colKey === 'department') return b.department?.name || ''
+  if (colKey === 'foreman') return b.foreman?.name || ''
+  if (colKey === 'membersCount') return String(b.members.length)
+  return ''
+}
+
+const SHIFT_COLUMNS: ColDef<ShiftTask>[] = [
+  { key: 'date', label: 'Дата', group: 'Основное', render: (t) => <span className="text-sm whitespace-nowrap">{t.date}</span> },
+  { key: 'shift', label: 'Смена', group: 'Основное', render: (t) => <Badge variant="outline">{shiftLabels[t.shift] || t.shift}</Badge> },
+  { key: 'brigade', label: 'Бригада', group: 'Основное', render: (t) => <span className="text-sm">{t.brigade?.name || '\u2014'}</span> },
+  { key: 'description', label: 'Описание', group: 'Основное', render: (t) => <span className="text-sm max-w-[250px] truncate" title={t.description}>{t.description}</span> },
+  { key: 'status', label: 'Статус', group: 'Основное', render: (t) => <ShiftStatusBadge status={t.status} /> },
+]
+const SHIFT_DEFAULT_COLUMNS = ['date', 'shift', 'brigade', 'description', 'status']
+
+function shiftCellText(t: ShiftTask, colKey: string): string {
+  if (colKey === 'date') return t.date || ''
+  if (colKey === 'shift') return shiftLabels[t.shift] || t.shift
+  if (colKey === 'brigade') return t.brigade?.name || ''
+  if (colKey === 'description') return t.description || ''
+  if (colKey === 'status') { const m: Record<string,string> = { planned: 'Запланировано', in_progress: 'Выполняется', completed: 'Завершено', cancelled: 'Отменено' }; return m[t.status] || t.status }
+  return ''
+}
+
+const PERMIT_COLUMNS: ColDef<WorkPermit>[] = [
+  { key: 'number', label: 'Номер', group: 'Основное', render: (w) => <span className="font-mono text-sm font-medium">{w.number}</span> },
+  { key: 'workType', label: 'Тип работы', group: 'Основное', render: (w) => <span className="text-sm">{workTypeLabels[w.workType] || w.workType}</span> },
+  { key: 'equipment', label: 'Оборудование', group: 'Основное', render: (w) => <span className="text-sm max-w-[150px] truncate">{w.equipment ? w.equipment.code : '\u2014'}</span> },
+  { key: 'riskLevel', label: 'Уровень риска', group: 'Основное', render: (w) => <RiskBadge level={w.riskLevel} /> },
+  { key: 'status', label: 'Статус', group: 'Основное', render: (w) => <PermitStatusBadge status={w.status} /> },
+]
+const PERMIT_DEFAULT_COLUMNS = ['number', 'workType', 'equipment', 'riskLevel', 'status']
+
+function permitCellText(w: WorkPermit, colKey: string): string {
+  if (colKey === 'number') return w.number || ''
+  if (colKey === 'workType') return workTypeLabels[w.workType] || w.workType
+  if (colKey === 'equipment') return w.equipment?.code || ''
+  if (colKey === 'riskLevel') { const m: Record<string,string> = { low: 'Низкий', normal: 'Нормальный', high: 'Высокий', extreme: 'Экстремальный' }; return m[w.riskLevel] || w.riskLevel }
+  if (colKey === 'status') { const m: Record<string,string> = { draft: 'Черновик', active: 'Активен', completed: 'Завершён', cancelled: 'Отменён' }; return m[w.status] || w.status }
+  return ''
 }
 
 export default function PersonnelPage() {
@@ -378,56 +435,34 @@ export default function PersonnelPage() {
         <TabsContent value="brigades">
           <Card>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="pl-6">Код</TableHead>
-                    <TableHead>Название</TableHead>
-                    <TableHead>Подразделение</TableHead>
-                    <TableHead>Бригадир</TableHead>
-                    <TableHead>Кол-во человек</TableHead>
-                    <TableHead className="pr-6 text-right">Действия</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableSkeleton cols={6} />
-                  ) : brigades.length === 0 ? (
-                    <EmptyTablePlaceholder message="Бригады ещё не созданы. Нажмите кнопку «Создать бригаду» для добавления." />
-                  ) : (
-                    brigades.map((b) => (
-                      <TableRow key={b.id}>
-                        <TableCell className="pl-6 font-mono text-sm">{b.code}</TableCell>
-                        <TableCell className="font-medium">{b.name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{b.department?.name || '—'}</TableCell>
-                        <TableCell className="text-sm">{b.foreman?.name || '—'}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">{b.members.length}</Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="pr-6 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="size-8">
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="gap-2" onClick={() => openEditDialog(b)}>
-                                <Pencil className="size-4" /> Редактировать
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600" onClick={() => openDeleteDialog(b)}>
-                                <Trash2 className="size-4" /> Удалить
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <SortableFilterableTable<Brigade>
+                columns={BRIGADE_COLUMNS}
+                defaultVisibleColumns={BRIGADE_DEFAULT_COLUMNS}
+                items={brigades}
+                loading={loading}
+                itemKey="id"
+                cellText={brigadeCellText}
+                storageKey="personnel-brigades-columns"
+                emptyMessage="Бригады ещё не созданы. Нажмите кнопку «Создать бригаду» для добавления."
+                trailingColumnHeader="Действия"
+                trailingColumn={(b) => (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="size-8">
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem className="gap-2" onClick={() => openEditDialog(b)}>
+                        <Pencil className="size-4" /> Редактировать
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="gap-2 text-red-600 focus:text-red-600" onClick={() => openDeleteDialog(b)}>
+                        <Trash2 className="size-4" /> Удалить
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              />
             </CardContent>
           </Card>
 
@@ -460,51 +495,29 @@ export default function PersonnelPage() {
         <TabsContent value="shifts">
           <Card>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="pl-6">Дата</TableHead>
-                    <TableHead>Смена</TableHead>
-                    <TableHead>Бригада</TableHead>
-                    <TableHead>Описание</TableHead>
-                    <TableHead>Статус</TableHead>
-                    <TableHead className="pr-6 text-right">Действия</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableSkeleton cols={6} />
-                  ) : shiftTasks.length === 0 ? (
-                    <EmptyTablePlaceholder message="Сменно-суточные задания ещё не созданы." />
-                  ) : (
-                    shiftTasks.map((task) => (
-                      <TableRow key={task.id}>
-                        <TableCell className="pl-6 text-sm whitespace-nowrap">{task.date}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{shiftLabels[task.shift] || task.shift}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">{task.brigade?.name || '—'}</TableCell>
-                        <TableCell className="text-sm max-w-[250px] truncate" title={task.description}>
-                          {task.description}
-                        </TableCell>
-                        <TableCell><ShiftStatusBadge status={task.status} /></TableCell>
-                        <TableCell className="pr-6 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="size-8">
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="gap-2"><Eye className="size-4" /> Просмотр</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <SortableFilterableTable<ShiftTask>
+                columns={SHIFT_COLUMNS}
+                defaultVisibleColumns={SHIFT_DEFAULT_COLUMNS}
+                items={shiftTasks}
+                loading={loading}
+                itemKey="id"
+                cellText={shiftCellText}
+                storageKey="personnel-shifts-columns"
+                emptyMessage="Сменно-суточные задания ещё не созданы."
+                trailingColumnHeader="Действия"
+                trailingColumn={(task) => (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="size-8">
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem className="gap-2"><Eye className="size-4" /> Просмотр</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -513,53 +526,29 @@ export default function PersonnelPage() {
         <TabsContent value="permits">
           <Card>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="pl-6">Номер</TableHead>
-                    <TableHead>Тип работы</TableHead>
-                    <TableHead>Оборудование</TableHead>
-                    <TableHead>Уровень риска</TableHead>
-                    <TableHead>Статус</TableHead>
-                    <TableHead className="pr-6 text-right">Действия</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableSkeleton cols={6} />
-                  ) : workPermits.length === 0 ? (
-                    <EmptyTablePlaceholder message="Наряд-допуски ещё не оформлены." />
-                  ) : (
-                    workPermits.map((wp) => (
-                      <TableRow key={wp.id}>
-                        <TableCell className="pl-6 font-mono text-sm font-medium">{wp.number}</TableCell>
-                        <TableCell className="text-sm">
-                          {workTypeLabels[wp.workType] || wp.workType}
-                        </TableCell>
-                        <TableCell className="text-sm max-w-[150px] truncate">
-                          {wp.equipment ? (
-                            <span title={wp.equipment.name}>{wp.equipment.code}</span>
-                          ) : '—'}
-                        </TableCell>
-                        <TableCell><RiskBadge level={wp.riskLevel} /></TableCell>
-                        <TableCell><PermitStatusBadge status={wp.status} /></TableCell>
-                        <TableCell className="pr-6 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="size-8">
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="gap-2"><Eye className="size-4" /> Просмотр</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <SortableFilterableTable<WorkPermit>
+                columns={PERMIT_COLUMNS}
+                defaultVisibleColumns={PERMIT_DEFAULT_COLUMNS}
+                items={workPermits}
+                loading={loading}
+                itemKey="id"
+                cellText={permitCellText}
+                storageKey="personnel-permits-columns"
+                emptyMessage="Наряд-допуски ещё не оформлены."
+                trailingColumnHeader="Действия"
+                trailingColumn={(wp) => (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="size-8">
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem className="gap-2"><Eye className="size-4" /> Просмотр</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              />
             </CardContent>
           </Card>
         </TabsContent>
